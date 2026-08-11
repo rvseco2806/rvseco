@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "RVS Eco App",
+    "slug": "rvseco-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.rvseco.worker"
+    }
+  }
+}
