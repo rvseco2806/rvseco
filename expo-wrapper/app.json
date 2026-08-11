@@ -1,7 +1,8 @@
 {
   "expo": {
     "name": "RVS Eco App",
-    "slug": "rvseco-app",
+    "slug": "rvseco",
+    "owner": "rvseco2806s-team",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -9,7 +10,10 @@
       "supportsTablet": true
     },
     "android": {
-      "package": "com.rvseco.worker"
+      "package": "com.rvseco.worker",
+      "adaptiveIcon": {
+        "backgroundColor": "#0c5c37"
+      }
     }
   }
 }
