@@ -1,5 +1,6 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -212,6 +213,53 @@ export const initDb = async () => {
         ]);
       }
       console.log(`Seeded ${seedRecords.length} default records.`);
+    }
+
+    // Seed Establishments from JSON if empty
+    const establishmentsCount = await get(`SELECT COUNT(*) as count FROM establishments`);
+    if (establishmentsCount.count === 0) {
+      try {
+        const jsonPath = path.resolve(__dirname, 'establishments.json');
+        if (fs.existsSync(jsonPath)) {
+          const rawData = fs.readFileSync(jsonPath, 'utf8');
+          const ests = JSON.parse(rawData);
+          console.log(`Seeding ${ests.length} establishments from JSON...`);
+          
+          await new Promise((resolve, reject) => {
+            db.serialize(() => {
+              const stmt = db.prepare(`INSERT INTO establishments (
+                id, name, proprietor, phone, monthly_fee, penalty, balance, route_id, route_name, status, last_billed_month
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
+              
+              const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+              ests.forEach(e => {
+                stmt.run(
+                  e.id,
+                  e.name,
+                  e.proprietor || '',
+                  e.phone || '',
+                  parseFloat(e.monthlyFee) || 0,
+                  parseFloat(e.penalty) || 0,
+                  parseFloat(e.previousBalance) || 0,
+                  parseInt(e.routeId) || 1,
+                  e.routeName,
+                  e.status || 'active',
+                  e.lastBilledMonth || currentMonthKey
+                );
+              });
+              stmt.finalize((err) => {
+                if (err) reject(err);
+                else resolve();
+              });
+            });
+          });
+          console.log('Finished seeding establishments.');
+        } else {
+          console.log('establishments.json seed file not found, skipping seeding.');
+        }
+      } catch (err) {
+        console.error('Error seeding establishments from JSON:', err.message);
+      }
     }
 
     // Seed Establishment Payments if empty

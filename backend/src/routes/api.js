@@ -563,14 +563,9 @@ router.put('/users/:username', async (req, res) => {
 // Reset Database Administration endpoint
 router.post('/reset', async (req, res) => {
   try {
-    await run(`DROP TABLE IF EXISTS rates`);
-    await run(`DROP TABLE IF EXISTS divisions`);
-    await run(`DROP TABLE IF EXISTS vehicles`);
-    await run(`DROP TABLE IF EXISTS drivers`);
-    await run(`DROP TABLE IF EXISTS records`);
-    await run(`DROP TABLE IF EXISTS establishments`);
-    await run(`DROP TABLE IF EXISTS establishment_payments`);
-    await run(`DROP TABLE IF EXISTS users`);
+    await run(`DELETE FROM records`);
+    await run(`DELETE FROM establishment_payments`);
+    await run(`DELETE FROM establishments`);
     
     await initDb();
     res.json({ success: true });
