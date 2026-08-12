@@ -249,43 +249,7 @@ const generateSeedRecords = () => {
 };
 
 const generateSeedEstablishmentPayments = (establishments) => {
-  const payments = [];
-  const paymentModes = ['UPI', 'Cash', 'Card'];
-  const collectors = [
-    { name: 'operator_est', id: 'OP_EST_01' },
-    { name: 'Suresh', id: 'OP_EST_02' },
-    { name: 'Ramesh', id: 'OP_EST_03' }
-  ];
-
-  const activeEsts = establishments.filter(e => e.monthlyFee > 0).slice(0, 150);
-
-  for (let day = 19; day <= 26; day++) {
-    const dateStr = `2026-06-${day}`;
-    const count = 8 + (day % 8);
-    for (let i = 1; i <= count; i++) {
-      const est = activeEsts[(day * 7 + i) % activeEsts.length];
-      if (!est) continue;
-      const collector = collectors[(day + i) % collectors.length];
-      const mode = paymentModes[(day * 3 + i) % paymentModes.length];
-      const receiptNo = `RVS2606${day}${String(i).padStart(4, '0')}`;
-      const hour = 9 + (i % 8);
-      const minute = (i * 12) % 60;
-      
-      payments.push({
-        id: receiptNo,
-        receiptNo: receiptNo,
-        dateTime: `${dateStr}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`,
-        establishmentId: est.id,
-        establishmentName: est.name,
-        amountPaid: est.monthlyFee,
-        paymentMode: mode,
-        remarks: 'Monthly User Fee',
-        collectorName: collector.name,
-        collectorId: collector.id
-      });
-    }
-  }
-  return payments;
+  return [];
 };
 
 export default db;

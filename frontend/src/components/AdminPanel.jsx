@@ -408,10 +408,13 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
 
   // Line Chart Data (Collection Trend over dates)
   const getLineData = () => {
-    // Dates June 19 to June 26
     const dateMap = {};
-    for (let day = 19; day <= 26; day++) {
-      dateMap[`2026-06-${day}`] = { amount: 0, weight: 0, count: 0 };
+    const today = new Date();
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      const dateKey = d.toLocaleDateString('en-CA');
+      dateMap[dateKey] = { amount: 0, weight: 0, count: 0 };
     }
 
     records.forEach(r => {
@@ -423,11 +426,10 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
       }
     });
 
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     return Object.entries(dateMap).map(([date, data]) => {
-      // Format to short date like "19 Jun"
-      const dayNum = date.split('-')[2];
-      const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-      const label = `${dayNum} Jun`;
+      const [year, month, day] = date.split('-').map(Number);
+      const label = `${day} ${monthNames[month - 1]}`;
       return {
         dateStr: label,
         Amount: Math.round(data.amount),
@@ -443,29 +445,19 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
 
   const getFilteredEstDashboardPayments = () => {
     const localToday = new Date().toLocaleDateString('en-CA');
-    const hasTodayPayments = establishmentPaymentsList.some(p => p.dateTime.startsWith(localToday));
-    const todayStr = hasTodayPayments ? localToday : '2026-06-26';
 
     if (estDateRange === 'today') {
-      return establishmentPaymentsList.filter(p => p.dateTime.startsWith(todayStr));
+      return establishmentPaymentsList.filter(p => p.dateTime.startsWith(localToday));
     }
     
     // Last 7 days
-    if (hasTodayPayments) {
-      const todayDate = new Date(localToday);
-      const pastDate = new Date(todayDate);
-      pastDate.setDate(todayDate.getDate() - 7);
-      const pastStr = pastDate.toLocaleDateString('en-CA');
-      return establishmentPaymentsList.filter(p => {
-        const d = p.dateTime.split('T')[0];
-        return d >= pastStr && d <= localToday;
-      });
-    }
-    
-    // Fallback/Default for mock data
+    const todayDate = new Date(localToday);
+    const pastDate = new Date(todayDate);
+    pastDate.setDate(todayDate.getDate() - 7);
+    const pastStr = pastDate.toLocaleDateString('en-CA');
     return establishmentPaymentsList.filter(p => {
       const d = p.dateTime.split('T')[0];
-      return d >= '2026-06-19' && d <= '2026-06-26';
+      return d >= pastStr && d <= localToday;
     });
   };
 
@@ -511,8 +503,12 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
   // Line Chart: Daily collection trend
   const getEstLineData = () => {
     const dateMap = {};
-    for (let day = 19; day <= 26; day++) {
-      dateMap[`2026-06-${day}`] = { amount: 0 };
+    const today = new Date();
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      const dateKey = d.toLocaleDateString('en-CA');
+      dateMap[dateKey] = { amount: 0 };
     }
 
     establishmentPaymentsList.forEach(p => {
@@ -522,9 +518,10 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
       }
     });
 
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     return Object.entries(dateMap).map(([date, data]) => {
-      const dayNum = date.split('-')[2];
-      const label = `${dayNum} Jun`;
+      const [year, month, day] = date.split('-').map(Number);
+      const label = `${day} ${monthNames[month - 1]}`;
       return {
         dateStr: label,
         Amount: Math.round(data.amount)
