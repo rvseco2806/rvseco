@@ -68,9 +68,19 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
     others_blackplastic: 3
   });
 
+  // Helper to get local date ISO string (YYYY-MM-DD)
+  const getLocalDateISO = (offsetDays = 0) => {
+    const d = new Date();
+    if (offsetDays !== 0) {
+      d.setDate(d.getDate() + offsetDays);
+    }
+    const tzOffset = d.getTimezoneOffset() * 60000;
+    return new Date(d.getTime() - tzOffset).toISOString().split('T')[0];
+  };
+
   // Records page filter state
   // Records page filter state
-  const [filterDate, setFilterDate] = useState('2026-06-20');
+  const [filterDate, setFilterDate] = useState(() => getLocalDateISO());
   const [filterDivision, setFilterDivision] = useState('All');
   const [filterVehicleType, setFilterVehicleType] = useState('All');
   const [filterDriver, setFilterDriver] = useState('All');
@@ -88,8 +98,8 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
   // Quick & Custom Reports State
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth());
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [reportStartDate, setReportStartDate] = useState('2026-06-19');
-  const [reportEndDate, setReportEndDate] = useState('2026-06-26');
+  const [reportStartDate, setReportStartDate] = useState(() => getLocalDateISO(-7));
+  const [reportEndDate, setReportEndDate] = useState(() => getLocalDateISO());
   const [reportDivision, setReportDivision] = useState('All');
   const [reportVehicle, setReportVehicle] = useState('All');
   const [reportDriver, setReportDriver] = useState('All');
@@ -147,9 +157,9 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
     const recs = await db.getRecords();
     setRecords(recs);
     
-    const localToday = new Date().toLocaleDateString('en-CA');
+    const localToday = getLocalDateISO();
     const hasTodayRecords = recs.some(r => r.dateTime.startsWith(localToday));
-    const defaultSearchDate = hasTodayRecords ? localToday : '2026-06-20';
+    const defaultSearchDate = localToday;
     
     setFilterDate(defaultSearchDate);
     setRecordSearchResults(recs.filter(r => r.dateTime.startsWith(defaultSearchDate)));
@@ -344,31 +354,17 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
 
   // Filter records based on selected dashboard date range
   const getFilteredDashboardRecords = () => {
-    const localToday = new Date().toLocaleDateString('en-CA');
-    const hasTodayRecords = records.some(r => r.dateTime.startsWith(localToday));
-    const todayStr = hasTodayRecords ? localToday : '2026-06-26';
+    const localToday = getLocalDateISO();
 
     if (dateRange === 'today') {
-      return records.filter(r => r.dateTime.startsWith(todayStr));
+      return records.filter(r => r.dateTime.startsWith(localToday));
     }
     
     // Last 7 days: calculate range
-    if (hasTodayRecords) {
-      const todayDate = new Date(localToday);
-      const pastDate = new Date(todayDate);
-      pastDate.setDate(todayDate.getDate() - 7);
-      
-      const pastStr = pastDate.toLocaleDateString('en-CA');
-      return records.filter(r => {
-        const d = r.dateTime.split('T')[0];
-        return d >= pastStr && d <= localToday;
-      });
-    }
-    
-    // Fallback/Default for mock data
+    const pastStr = getLocalDateISO(-7);
     return records.filter(r => {
       const d = r.dateTime.split('T')[0];
-      return d >= '2026-06-19' && d <= '2026-06-26';
+      return d >= pastStr && d <= localToday;
     });
   };
 
@@ -568,7 +564,19 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
     // Build content
     const csvContent = [headers.join(','), ...rows.map(row => row.map(val => `"${val}"`).join(','))].join('\n');
     
-    // Download
+    // Check if running in mobile app webview
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'DOWNLOAD_FILE',
+        filename: filename,
+        content: csvContent,
+        mimeType: 'text/csv'
+      }));
+      addLog(`Exported records CSV via Mobile App: ${filename}`);
+      return;
+    }
+
+    // Web Browser Download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -584,6 +592,20 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
   // Establishments Administration Methods
   const exportEstToCSV = (headers, rows, filename = 'Establishment_Report.csv') => {
     const csvContent = [headers.join(','), ...rows.map(row => row.map(val => `"${val}"`).join(','))].join('\n');
+    
+    // Check if running in mobile app webview
+    if (window.ReactNativeWebView) {
+      window.ReactNativeWebView.postMessage(JSON.stringify({
+        type: 'DOWNLOAD_FILE',
+        filename: filename,
+        content: csvContent,
+        mimeType: 'text/csv'
+      }));
+      addLog(`Exported establishment CSV via Mobile App: ${filename}`);
+      return;
+    }
+
+    // Web Browser Download
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -1451,8 +1473,18 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                     value={dateRange}
                     onChange={(e) => setDateRange(e.target.value)}
                   >
-                    <option value="today">Today (26-Jun-2026)</option>
-                    <option value="7days">Last 7 Days (19 Jun - 26 Jun)</option>
+                    <option value="today">Today ({(() => {
+                      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const d = new Date();
+                      return `${String(d.getDate()).padStart(2, '0')}-${months[d.getMonth()]}-${d.getFullYear()}`;
+                    })()})</option>
+                    <option value="7days">Last 7 Days ({(() => {
+                      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const today = new Date();
+                      const past = new Date();
+                      past.setDate(today.getDate() - 7);
+                      return `${past.getDate()} ${months[past.getMonth()]} - ${today.getDate()} ${months[today.getMonth()]}`;
+                    })()})</option>
                   </select>
                 </div>
                 
