@@ -4,8 +4,10 @@
 
 export const getBillingPeriod = (dateObj = new Date()) => {
   const d = new Date(dateObj);
-  const firstDay = new Date(d.getFullYear(), d.getMonth(), 1);
-  const lastDay = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  // Subtract 1 month to get previous month
+  const prevMonthDate = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+  const firstDay = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth(), 1);
+  const lastDay = new Date(prevMonthDate.getFullYear(), prevMonthDate.getMonth() + 1, 0);
 
   const formatDate = (date) => {
     const dd = String(date.getDate()).padStart(2, '0');
@@ -14,7 +16,7 @@ export const getBillingPeriod = (dateObj = new Date()) => {
     return `${dd}/${mm}/${yyyy}`;
   };
 
-  const monthName = d.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+  const monthName = prevMonthDate.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
   return {
     startDate: formatDate(firstDay),
     endDate: formatDate(lastDay),

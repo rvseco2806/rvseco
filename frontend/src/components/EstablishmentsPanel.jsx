@@ -35,6 +35,8 @@ export default function EstablishmentsPanel({ onBackToHome }) {
   const [amountReceived, setAmountReceived] = useState('0');
   const [remarks, setRemarks] = useState('');
   const [selectedBillingPeriod, setSelectedBillingPeriod] = useState(getBillingPeriod().periodStr);
+  const [customBillingPeriod, setCustomBillingPeriod] = useState('');
+  const [isCustomPeriod, setIsCustomPeriod] = useState(false);
 
   // Revisit scheduling states
   const [showRevisitForm, setShowRevisitForm] = useState(false);
@@ -130,7 +132,6 @@ export default function EstablishmentsPanel({ onBackToHome }) {
       fetchAllPayments();
     }
   }, [screen]);
-
   // Load payment history when establishment is selected
   useEffect(() => {
     if (selectedEstablishment) {
@@ -141,6 +142,23 @@ export default function EstablishmentsPanel({ onBackToHome }) {
       fetchHistory();
     }
   }, [selectedEstablishment]);
+
+  // Handle custom billing period pre-population
+  useEffect(() => {
+    if (selectedEstablishment) {
+      const opts = generateBillingPeriodOptions();
+      const matchedOpt = opts.find(o => o.periodStr === selectedBillingPeriod);
+      const monthName = matchedOpt ? matchedOpt.monthName : '';
+      
+      if (selectedEstablishment.previousBalance > 0) {
+        setCustomBillingPeriod(`${monthName} & Arrears`);
+        setIsCustomPeriod(true);
+      } else {
+        setCustomBillingPeriod(monthName || selectedBillingPeriod);
+        setIsCustomPeriod(false);
+      }
+    }
+  }, [selectedBillingPeriod, selectedEstablishment]);
 
   const handleGenerateReceipt = async () => {
     if (!selectedEstablishment) return;
@@ -154,12 +172,11 @@ export default function EstablishmentsPanel({ onBackToHome }) {
         remarks: remarks,
         collectorName: executiveName,
         collectorId: executiveId,
-        billingPeriod: selectedBillingPeriod
+        billingPeriod: isCustomPeriod ? customBillingPeriod : selectedBillingPeriod
       };
       
       const saved = await db.addEstablishmentPayment(payment);
       setLatestReceipt(saved);
-      
       // Update selectedestablishment outstanding details
       setSelectedEstablishment(prev => ({
         ...prev,
@@ -929,13 +946,44 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                 </select>
               </div>
 
+              {/* Custom Billing Period Toggle/Input */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', backgroundColor: '#f8fafc', padding: '12px', borderRadius: '10px', border: '1px solid #e2e8f0' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700, color: '#334155' }}>
+                  <input
+                    type="checkbox"
+                    checked={isCustomPeriod}
+                    onChange={(e) => setIsCustomPeriod(e.target.checked)}
+                    style={{ cursor: 'pointer', width: '15px', height: '15px', accentColor: '#0c5c37' }}
+                  />
+                  Use Custom Billing Period
+                </label>
+                {isCustomPeriod && (
+                  <input
+                    type="text"
+                    value={customBillingPeriod}
+                    onChange={(e) => setCustomBillingPeriod(e.target.value)}
+                    placeholder="e.g. July 2026 & Arrears"
+                    style={{
+                      width: '100%',
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: '1.5px solid #cbd5e1',
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      outline: 'none',
+                      marginTop: '4px'
+                    }}
+                  />
+                )}
+              </div>
+
               {/* Amount Details Box */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0' }}>
                 <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', display: 'block', marginBottom: '10px' }}>Amount Details</span>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '0.8rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', backgroundColor: '#f8fafc', padding: '6px 8px', borderRadius: '6px', marginBottom: '2px' }}>
                     <span style={{ color: '#64748b', fontSize: '0.75rem' }}>Billing Period</span>
-                    <span style={{ fontWeight: 700, fontSize: '0.75rem', color: '#0c5c37' }}>{selectedBillingPeriod}</span>
+                    <span style={{ fontWeight: 700, fontSize: '0.75rem', color: '#0c5c37' }}>{isCustomPeriod ? customBillingPeriod : selectedBillingPeriod}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#64748b' }}>Monthly Fee</span>

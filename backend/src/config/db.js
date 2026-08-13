@@ -112,6 +112,7 @@ export const initDb = async () => {
     await run(`ALTER TABLE establishments ADD COLUMN status TEXT DEFAULT 'active'`).catch(() => {});
     await run(`ALTER TABLE establishments ADD COLUMN revisit_date TEXT`).catch(() => {});
     await run(`ALTER TABLE establishments ADD COLUMN last_billed_month TEXT`).catch(() => {});
+    await run(`ALTER TABLE establishment_payments ADD COLUMN billing_period TEXT`).catch(() => {});
     await run(`UPDATE establishments SET status = 'inactive' WHERE monthly_fee = 0 OR monthly_fee IS NULL`).catch(() => {});
 
     // 6. Create Establishments table
@@ -141,7 +142,8 @@ export const initDb = async () => {
       payment_mode TEXT,
       remarks TEXT,
       collector_name TEXT,
-      collector_id TEXT
+      collector_id TEXT,
+      billing_period TEXT
     )`);
 
 

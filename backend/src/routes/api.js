@@ -254,27 +254,67 @@ const processRowArrears = async (r) => {
   const today = new Date();
   const currentY = today.getFullYear();
   const currentM = today.getMonth() + 1;
-  const currentMonthKey = `${currentY}-${String(currentM).padStart(2, '0')}`;
+
+  // The active billing month (e.g. July for August collection)
+  const activeMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const activeMonthKey = `${activeMonthDate.getFullYear()}-${String(activeMonthDate.getMonth() + 1).padStart(2, '0')}`;
 
   let lastBilledMonth = r.last_billed_month;
   if (!lastBilledMonth) {
-    await run(`UPDATE establishments SET last_billed_month = ? WHERE id = ?`, [currentMonthKey, r.id]).catch(() => {});
-    r.last_billed_month = currentMonthKey;
+    await run(`UPDATE establishments SET last_billed_month = ? WHERE id = ?`, [activeMonthKey, r.id]).catch(() => {});
+    r.last_billed_month = activeMonthKey;
     return r;
   }
 
-  const [lastY, lastM] = lastBilledMonth.split('-').map(Number);
-  const missedMonths = (currentY - lastY) * 12 + (currentM - lastM);
+  // The latest completed month that is now late/arrear (e.g. June for August collection)
+  const lateLimitDate = new Date(today.getFullYear(), today.getMonth() - 2, 1);
+  const lateLimitY = lateLimitDate.getFullYear();
+  const lateLimitM = lateLimitDate.getMonth() + 1;
 
-  if (missedMonths > 0) {
-    const additionalBalance = missedMonths * parseFloat(r.monthly_fee);
-    const newBalance = (parseFloat(r.balance) || 0) + additionalBalance;
+  const [lastY, lastM] = lastBilledMonth.split('-').map(Number);
+
+  // Iterate months starting from lastBilledMonth + 1 up to lateLimit
+  let iterY = lastY;
+  let iterM = lastM + 1;
+  if (iterM > 12) {
+    iterM = 1;
+    iterY += 1;
+  }
+
+  let newBalance = parseFloat(r.balance) || 0;
+  let updatedLastBilledMonth = lastBilledMonth;
+
+  while (iterY < lateLimitY || (iterY === lateLimitY && iterM <= lateLimitM)) {
+    const iterMonthDate = new Date(iterY, iterM - 1, 1);
+    const iterMonthName = iterMonthDate.toLocaleString('en-IN', { month: 'long', year: 'numeric' }); // e.g. "June 2026"
+    
+    // Check if a payment exists for this specific month
+    const queryStr = `SELECT COUNT(*) as count FROM establishment_payments WHERE establishment_id = ? AND billing_period LIKE ?`;
+    const checkPayment = await query(queryStr, [r.id, `%${iterMonthName}%`]);
+    const paid = checkPayment[0].count > 0;
+
+    if (!paid) {
+      newBalance += parseFloat(r.monthly_fee);
+    }
+    
+    updatedLastBilledMonth = `${iterY}-${String(iterM).padStart(2, '0')}`;
+
+    // Move to next month
+    iterM += 1;
+    if (iterM > 12) {
+      iterM = 1;
+      iterY += 1;
+    }
+  }
+
+  if (updatedLastBilledMonth !== lastBilledMonth) {
     await run(`UPDATE establishments SET balance = ?, last_billed_month = ? WHERE id = ?`, [
-      newBalance, currentMonthKey, r.id
+      newBalance, updatedLastBilledMonth, r.id
     ]).catch(() => {});
     r.balance = newBalance;
-    r.last_billed_month = currentMonthKey;
+    r.last_billed_month = updatedLastBilledMonth;
   }
+
   return r;
 };
 
@@ -452,7 +492,8 @@ router.get('/establishment-payments', async (req, res) => {
       paymentMode: r.payment_mode,
       remarks: r.remarks,
       collectorName: r.collector_name,
-      collectorId: r.collector_id
+      collectorId: r.collector_id,
+      billingPeriod: r.billing_period
     })));
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -476,11 +517,12 @@ router.post('/establishment-payments', async (req, res) => {
     const dateTime = new Date().toISOString();
 
     await run(`INSERT INTO establishment_payments (
-      id, receipt_no, date_time, establishment_id, establishment_name, amount_paid, payment_mode, remarks, collector_name, collector_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+      id, receipt_no, date_time, establishment_id, establishment_name, amount_paid, payment_mode, remarks, collector_name, collector_id, billing_period
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
       id, receiptNo, dateTime, payment.establishmentId, payment.establishmentName,
       parseFloat(payment.amountPaid) || 0, payment.paymentMode, payment.remarks,
-      payment.collectorName || 'Srinivas', payment.collectorId || 'CE-0187'
+      payment.collectorName || 'Srinivas', payment.collectorId || 'CE-0187',
+      payment.billingPeriod || null
     ]);
 
     // Update establishment balance after payment
@@ -513,7 +555,8 @@ router.get('/establishments/:id/payments', async (req, res) => {
       paymentMode: r.payment_mode,
       remarks: r.remarks,
       collectorName: r.collector_name,
-      collectorId: r.collector_id
+      collectorId: r.collector_id,
+      billingPeriod: r.billing_period
     })));
   } catch (err) {
     res.status(500).json({ error: err.message });
