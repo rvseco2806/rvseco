@@ -250,6 +250,7 @@ router.post('/records', async (req, res) => {
 // Helper to process monthly arrears carry-forward
 const processRowArrears = async (r) => {
   if (!r || r.status === 'inactive' || !r.monthly_fee || r.monthly_fee <= 0) {
+    if (r) r.active_period_paid = 0;
     return r;
   }
   const today = new Date();
@@ -258,7 +259,12 @@ const processRowArrears = async (r) => {
 
   // The active billing month (e.g. July for August collection)
   const activeMonthDate = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  const activeMonthName = activeMonthDate.toLocaleString('en-IN', { month: 'long', year: 'numeric' }); // e.g. "July 2026"
   const activeMonthKey = `${activeMonthDate.getFullYear()}-${String(activeMonthDate.getMonth() + 1).padStart(2, '0')}`;
+
+  // Query active period payments
+  const pmtRow = await get(`SELECT SUM(amount_paid) as total FROM establishment_payments WHERE establishment_id = ? AND billing_period LIKE ?`, [r.id, `%${activeMonthName}%`]);
+  r.active_period_paid = pmtRow ? (parseFloat(pmtRow.total) || 0) : 0;
 
   let lastBilledMonth = r.last_billed_month;
   if (!lastBilledMonth) {
@@ -348,7 +354,8 @@ router.get('/establishments', async (req, res) => {
       routeName: r.route_name,
       status: r.status || 'active',
       revisitDate: r.revisit_date,
-      lastBilledMonth: r.last_billed_month
+      lastBilledMonth: r.last_billed_month,
+      activePeriodPaid: r.active_period_paid || 0
     })));
   } catch (err) {
     res.status(500).json({ error: err.message });

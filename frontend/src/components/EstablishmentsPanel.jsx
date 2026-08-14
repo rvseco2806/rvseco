@@ -126,6 +126,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
   // Re-fetch payments when screen is loaded/changed
   useEffect(() => {
     if (screen === 1) {
+      fetchEstablishments();
       fetchTodayPayments();
       fetchTodayRevisits();
     } else if (screen === 8) {
@@ -178,10 +179,17 @@ export default function EstablishmentsPanel({ onBackToHome }) {
       const saved = await db.addEstablishmentPayment(payment);
       setLatestReceipt(saved);
       // Update selectedestablishment outstanding details
-      setSelectedEstablishment(prev => ({
-        ...prev,
-        previousBalance: Math.max(0, prev.previousBalance - payment.amountPaid)
-      }));
+      setSelectedEstablishment(prev => {
+        const activePaid = prev.activePeriodPaid || 0;
+        const currentMonthDue = Math.max(0, prev.monthlyFee - activePaid);
+        const toCurrentMonth = Math.min(payment.amountPaid, currentMonthDue);
+        const toArrears = Math.max(0, payment.amountPaid - toCurrentMonth);
+        return {
+          ...prev,
+          activePeriodPaid: activePaid + toCurrentMonth,
+          previousBalance: Math.max(0, prev.previousBalance - toArrears)
+        };
+      });
       
       setScreen(5);
     } catch (err) {
@@ -202,7 +210,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
   // Calculate dynamic dashboard stats
   const todayReceiptsCount = todayPayments.length;
   const todayAmountCollected = todayPayments.reduce((sum, p) => sum + (parseFloat(p.amountPaid) || 0), 0);
-  const pendingCollectionsCount = establishments.filter(e => (e.monthlyFee + e.penalty + e.previousBalance) > 0).length;
+  const pendingCollectionsCount = establishments.filter(e => (Math.max(0, e.monthlyFee - (e.activePeriodPaid || 0)) + e.penalty + e.previousBalance) > 0).length;
 
   return (
     <div style={{ 
@@ -537,7 +545,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
             <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {establishments.length > 0 ? (
                 establishments.map(est => {
-                  const totalDue = est.monthlyFee + est.penalty + est.previousBalance;
+                  const totalDue = Math.max(0, est.monthlyFee - (est.activePeriodPaid || 0)) + est.penalty + est.previousBalance;
                   return (
                     <div 
                       key={est.id}
@@ -628,14 +636,14 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                 <span style={{ 
                   display: 'inline-block', 
                   fontSize: '0.7rem', 
-                  backgroundColor: (selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance) > 0 ? '#fee2e2' : '#d1fae5', 
-                  color: (selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance) > 0 ? '#ef4444' : '#065f46', 
+                  backgroundColor: (Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance) > 0 ? '#fee2e2' : '#d1fae5', 
+                  color: (Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance) > 0 ? '#ef4444' : '#065f46', 
                   padding: '2px 8px', 
                   borderRadius: '20px', 
                   fontWeight: 700, 
                   marginTop: '4px' 
                 }}>
-                  {(selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance) > 0 ? 'Payment Pending' : 'Paid'}
+                  {(Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance) > 0 ? 'Payment Pending' : 'Paid'}
                 </span>
                 <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '6px' }}>ID: {selectedEstablishment.id}</div>
               </div>
@@ -706,7 +714,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a' }}>Total Payable</span>
                     <span style={{ fontSize: '0.95rem', fontWeight: 800, color: '#0c5c37' }}>
-                      ₹{(selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance).toLocaleString()}
+                      ₹{(Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -852,7 +860,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
               </div>
 
               {/* Main Actions */}
-              {(selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance) > 0 && (
+              {(Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance) > 0 && (
                 <button 
                   onClick={() => setScreen(4)}
                   style={{ 
@@ -886,8 +894,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                   padding: '12px', 
                   fontWeight: 700, 
                   fontSize: '0.9rem', 
-                  cursor: 'pointer',
-                  marginTop: (selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance) <= 0 ? 'auto' : '0'
+                  marginTop: (Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance) <= 0 ? 'auto' : '0'
                 }}
               >
                 View Payment History
@@ -989,6 +996,12 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                     <span style={{ color: '#64748b' }}>Monthly Fee</span>
                     <span style={{ fontWeight: 700 }}>₹{selectedEstablishment.monthlyFee.toLocaleString()}</span>
                   </div>
+                  {(selectedEstablishment.activePeriodPaid || 0) > 0 && (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', color: '#10b981' }}>
+                      <span style={{ fontSize: '0.75rem' }}>Paid This Month</span>
+                      <span style={{ fontWeight: 700 }}>-₹{(selectedEstablishment.activePeriodPaid || 0).toLocaleString()}</span>
+                    </div>
+                  )}
                   <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                     <span style={{ color: '#64748b' }}>Penalty</span>
                     <span style={{ fontWeight: 700 }}>₹{selectedEstablishment.penalty.toLocaleString()}</span>
@@ -1001,7 +1014,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontWeight: 700, color: '#0f172a' }}>Total Payable</span>
                     <span style={{ fontSize: '1rem', fontWeight: 800, color: '#ef4444' }}>
-                      ₹{(selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance).toLocaleString()}
+                      ₹{(Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -1316,33 +1329,40 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.7rem', borderBottom: '1.5px dashed #cbd5e1', paddingBottom: '10px', marginBottom: '12px' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Monthly User Fee:</span>
-                    <span>₹{selectedEstablishment.monthlyFee.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Penalty:</span>
-                    <span>₹{selectedEstablishment.penalty.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Previous Balance:</span>
-                    <span>₹{selectedEstablishment.previousBalance.toFixed(2)}</span>
-                  </div>
-                  <hr style={{ border: 'none', borderTop: '1px dotted #cbd5e1' }} />
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
-                    <span>Total Payable:</span>
-                    <span>₹{(selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance).toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: '#0c5c37' }}>
-                    <span>Amount Received:</span>
-                    <span>₹{latestReceipt.amountPaid.toFixed(2)}</span>
-                  </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <span>Outstanding:</span>
-                    <span>
-                      ₹{Math.max(0, (selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance) - latestReceipt.amountPaid).toFixed(2)}
-                    </span>
-                  </div>
+                  {(() => {
+                    const outstandingAfter = Math.max(0, Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance);
+                    const totalPayableBefore = outstandingAfter + latestReceipt.amountPaid;
+                    const arrearsBefore = Math.max(0, totalPayableBefore - selectedEstablishment.monthlyFee - selectedEstablishment.penalty);
+                    return (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Monthly User Fee:</span>
+                          <span>₹{selectedEstablishment.monthlyFee.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Penalty:</span>
+                          <span>₹{selectedEstablishment.penalty.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Previous Balance:</span>
+                          <span>₹{arrearsBefore.toFixed(2)}</span>
+                        </div>
+                        <hr style={{ border: 'none', borderTop: '1px dotted #cbd5e1' }} />
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold' }}>
+                          <span>Total Payable:</span>
+                          <span>₹{totalPayableBefore.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', color: '#0c5c37' }}>
+                          <span>Amount Received:</span>
+                          <span>₹{latestReceipt.amountPaid.toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                          <span>Outstanding:</span>
+                          <span>₹{outstandingAfter.toFixed(2)}</span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', fontSize: '0.7rem', marginBottom: '24px' }}>
@@ -1427,7 +1447,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
               <div style={{ textAlign: 'center', borderRight: '1px solid #cbd5e1' }}>
                 <div style={{ fontSize: '0.65rem', color: '#64748b', fontWeight: 600 }}>Outstanding</div>
                 <div style={{ fontSize: '0.95rem', fontWeight: 800, color: '#ef4444', marginTop: '2px' }}>
-                  ₹{(selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance).toLocaleString()}
+                  ₹{(Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance).toLocaleString()}
                 </div>
               </div>
               <div style={{ textAlign: 'center' }}>
@@ -1544,7 +1564,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', fontWeight: 800 }}>
                       <span style={{ color: '#0f172a' }}>Net Outstanding Balance</span>
                       <span style={{ color: '#ef4444' }}>
-                        ₹{Math.max(0, (selectedEstablishment.monthlyFee + selectedEstablishment.penalty + selectedEstablishment.previousBalance - paymentHistory.reduce((sum, p) => sum + p.amountPaid, 0))).toLocaleString()} (Dr)
+                        ₹{(Math.max(0, selectedEstablishment.monthlyFee - (selectedEstablishment.activePeriodPaid || 0)) + selectedEstablishment.penalty + selectedEstablishment.previousBalance).toLocaleString()} (Dr)
                       </span>
                     </div>
                   </div>
