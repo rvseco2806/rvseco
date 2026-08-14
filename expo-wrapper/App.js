@@ -7,6 +7,7 @@ import * as Sharing from 'expo-sharing';
 export default function App() {
   // Production Web App URL deployed on Vercel
   const PRODUCTION_URL = 'https://rvseco.vercel.app';
+  const LOCAL_URL = 'http://192.168.0.114:5173';
   const targetUrl = PRODUCTION_URL; 
 
   const handleMessage = async (event) => {

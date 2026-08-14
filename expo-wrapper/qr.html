@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Expo Go QR Code</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+      background-color: #f8fafc;
+      color: #0f172a;
+    }
+    .card {
+      background: white;
+      padding: 32px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 20px;
+    }
+    h1 {
+      font-size: 1.5rem;
+      margin: 0;
+      color: #0c5c37;
+    }
+    p {
+      font-size: 0.9rem;
+      color: #64748b;
+      margin: 0;
+      max-width: 320px;
+      line-height: 1.5;
+    }
+    #qrcode {
+      padding: 16px;
+      background: white;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+    }
+    .url {
+      font-family: monospace;
+      background: #f1f5f9;
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      word-break: break-all;
+      color: #334155;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Scan with Expo Go</h1>
+    <p>Ensure your mobile phone is connected to the same Wi-Fi network as this PC (<strong>192.168.0.114</strong>).</p>
+    <div id="qrcode"></div>
+    <div class="url">exp://192.168.0.114:8081</div>
+  </div>
+  <script>
+    new QRCode(document.getElementById("qrcode"), {
+      text: "exp://192.168.0.114:8081",
+      width: 256,
+      height: 256,
+      colorDark : "#0c5c37",
+      colorLight : "#ffffff",
+      correctLevel : QRCode.CorrectLevel.H
+    });
+  </script>
+</body>
+</html>
