@@ -206,14 +206,21 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
       alert('Username and Password are required.');
       return;
     }
+    const suffix = `_${adminType}`;
+    let finalUsername = newUsername.trim().toLowerCase();
+    if (!finalUsername.endsWith(suffix)) {
+      finalUsername = finalUsername + suffix;
+    }
+    const finalRole = `${newUserRole}_${adminType}`;
+
     try {
       await db.addUser({
-        username: newUsername.trim().toLowerCase(),
+        username: finalUsername,
         password: newUserPassword,
-        role: newUserRole,
+        role: finalRole,
         status: newUserStatus
       });
-      addLog(`Added new user: ${newUsername.trim().toLowerCase()} (${newUserRole})`);
+      addLog(`Added new user: ${finalUsername} (${finalRole})`);
       setNewUsername('');
       setNewUserPassword('');
       setNewUserRole('operator');
@@ -442,6 +449,16 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
   };
 
   const lineData = getLineData();
+
+  const getFilteredUsers = () => {
+    return users.filter(u => {
+      if (adminType === 'drcc') {
+        return (u.role && u.role.endsWith('_drcc')) || (u.username && u.username.toLowerCase().endsWith('_drcc'));
+      } else {
+        return (u.role && u.role.endsWith('_est')) || (u.username && u.username.toLowerCase().endsWith('_est'));
+      }
+    });
+  };
 
   // Establishments Dashboard state and metrics calculations
   const [estDateRange, setEstDateRange] = useState('today');
@@ -3556,19 +3573,19 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                       </tr>
                     </thead>
                     <tbody>
-                      {users.map(u => (
+                      {getFilteredUsers().map(u => (
                         <tr key={u.username}>
                           <td style={{ fontWeight: 700 }}>{u.username}</td>
                           <td>
-                            <span className={`role-badge ${u.role === 'admin' ? 'admin' : 'operator'}`} style={{
+                            <span className={`role-badge ${(u.role && u.role.startsWith('admin')) ? 'admin' : 'operator'}`} style={{
                               padding: '4px 8px',
                               borderRadius: '12px',
                               fontSize: '0.75rem',
                               fontWeight: 600,
-                              backgroundColor: u.role === 'admin' ? '#fee2e2' : '#e0f2fe',
-                              color: u.role === 'admin' ? '#991b1b' : '#0369a1'
+                              backgroundColor: (u.role && u.role.startsWith('admin')) ? '#fee2e2' : '#e0f2fe',
+                              color: (u.role && u.role.startsWith('admin')) ? '#991b1b' : '#0369a1'
                             }}>
-                              {u.role === 'admin' ? 'Administrator' : 'Operator'}
+                              {(u.role && u.role.startsWith('admin')) ? 'Administrator' : 'Operator'}
                             </span>
                           </td>
                           <td>
@@ -3676,7 +3693,7 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                         style={{ width: '100%', padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1' }}
                       >
                         <option value="">-- Choose Account --</option>
-                        {users.map(u => (
+                        {getFilteredUsers().map(u => (
                           <option key={u.username} value={u.username}>
                             {u.username} ({u.role})
                           </option>
