@@ -328,7 +328,7 @@ const processRowArrears = async (r) => {
 // Establishments API
 router.get('/establishments', async (req, res) => {
   try {
-    const { route_id, q } = req.query;
+    const { route_id, q, status } = req.query;
     let sql = 'SELECT * FROM establishments WHERE 1=1';
     const params = [];
     if (route_id) {
@@ -339,6 +339,10 @@ router.get('/establishments', async (req, res) => {
       sql += ' AND (name LIKE ? OR proprietor LIKE ? OR id LIKE ?)';
       const likeQuery = `%${q}%`;
       params.push(likeQuery, likeQuery, likeQuery);
+    }
+    if (status) {
+      sql += ' AND status = ?';
+      params.push(status);
     }
     const rows = await query(sql, params);
     const processedRows = await Promise.all(rows.map(processRowArrears));
@@ -401,7 +405,7 @@ router.post('/establishments', async (req, res) => {
       parseFloat(est.previousBalance) || 0,
       parseInt(est.routeId) || 1,
       routeName,
-      est.status || 'active',
+      est.status || 'pending',
       est.revisitDate || null,
       est.lastBilledMonth || currentMonthKey
     ]);
@@ -416,7 +420,7 @@ router.post('/establishments', async (req, res) => {
       previousBalance: est.previousBalance,
       routeId: est.routeId,
       routeName,
-      status: est.status || 'active',
+      status: est.status || 'pending',
       revisitDate: est.revisitDate || null,
       lastBilledMonth: est.lastBilledMonth || currentMonthKey
     });
@@ -430,6 +434,22 @@ router.put('/establishments/:id', async (req, res) => {
     const { id } = req.params;
     const est = req.body;
 
+    const existing = await get(`SELECT * FROM establishments WHERE id = ?`, [id]);
+    if (!existing) {
+      return res.status(404).json({ error: 'Establishment not found' });
+    }
+
+    const name = est.name !== undefined ? est.name : existing.name;
+    const proprietor = est.proprietor !== undefined ? est.proprietor : existing.proprietor;
+    const phone = est.phone !== undefined ? est.phone : existing.phone;
+    const monthlyFee = est.monthlyFee !== undefined ? parseFloat(est.monthlyFee) : parseFloat(existing.monthly_fee);
+    const penalty = est.penalty !== undefined ? parseFloat(est.penalty) : parseFloat(existing.penalty);
+    const balance = est.previousBalance !== undefined ? parseFloat(est.previousBalance) : parseFloat(existing.balance);
+    const routeId = est.routeId !== undefined ? parseInt(est.routeId) : parseInt(existing.route_id);
+    const status = est.status !== undefined ? est.status : existing.status;
+    const revisitDate = est.revisitDate !== undefined ? est.revisitDate : existing.revisit_date;
+    const lastBilledMonth = est.lastBilledMonth !== undefined ? est.lastBilledMonth : existing.last_billed_month;
+
     const routesMap = {
       1: 'GANDHICHOWK',
       2: 'GATTAIAH CENTER',
@@ -439,38 +459,38 @@ router.put('/establishments/:id', async (req, res) => {
       6: 'MUSTAFANAGAR',
       7: 'WYRA ROAD'
     };
-    const routeName = routesMap[est.routeId] || 'GANDHICHOWK';
+    const routeName = routesMap[routeId] || 'GANDHICHOWK';
 
     await run(`UPDATE establishments SET 
       name = ?, proprietor = ?, phone = ?, monthly_fee = ?, penalty = ?, balance = ?, route_id = ?, route_name = ?, status = ?, revisit_date = ?, last_billed_month = ?
       WHERE id = ?`, [
-      est.name,
-      est.proprietor || '',
-      est.phone || '',
-      parseFloat(est.monthlyFee) || 0,
-      parseFloat(est.penalty) || 0,
-      parseFloat(est.previousBalance) || 0,
-      parseInt(est.routeId) || 1,
+      name,
+      proprietor || '',
+      phone || '',
+      monthlyFee || 0,
+      penalty || 0,
+      balance || 0,
+      routeId || 1,
       routeName,
-      est.status || 'active',
-      est.revisitDate !== undefined ? est.revisitDate : null,
-      est.lastBilledMonth || null,
+      status || 'pending',
+      revisitDate !== undefined ? revisitDate : null,
+      lastBilledMonth || null,
       id
     ]);
 
     res.json({
       id,
-      name: est.name,
-      proprietor: est.proprietor,
-      phone: est.phone,
-      monthlyFee: est.monthlyFee,
-      penalty: est.penalty,
-      previousBalance: est.previousBalance,
-      routeId: est.routeId,
+      name,
+      proprietor,
+      phone,
+      monthlyFee,
+      penalty,
+      previousBalance: balance,
+      routeId,
       routeName,
-      status: est.status || 'active',
-      revisitDate: est.revisitDate !== undefined ? est.revisitDate : null,
-      lastBilledMonth: est.lastBilledMonth || null
+      status,
+      revisitDate,
+      lastBilledMonth
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

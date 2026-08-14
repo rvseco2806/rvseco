@@ -276,7 +276,7 @@ class LocalStorageDB {
     return updatedList;
   }
 
-  getEstablishments(routeId, query) {
+  getEstablishments(routeId, query, status) {
     let list = JSON.parse(localStorage.getItem('rvs_establishments'));
     if (!list || !Array.isArray(list) || list.length === 0) {
       list = establishmentsData;
@@ -284,6 +284,9 @@ class LocalStorageDB {
     }
     list = this.processEstablishmentArrears(list);
     let filtered = list;
+    if (status) {
+      filtered = filtered.filter(e => (e.status || 'active') === status);
+    }
     if (routeId && routeId !== 'All') {
       filtered = filtered.filter(e => parseInt(e.routeId) === parseInt(routeId));
     }
@@ -376,7 +379,7 @@ class LocalStorageDB {
       previousBalance: parseFloat(est.previousBalance) || 0,
       routeId: parseInt(est.routeId) || 1,
       routeName: routeName,
-      status: est.status || 'active',
+      status: est.status || 'pending',
       revisitDate: est.revisitDate || null
     };
 
@@ -762,14 +765,15 @@ class BackendAPIClient {
     }
   }
 
-  async getEstablishments(routeId, query) {
+  async getEstablishments(routeId, query, status) {
     await this.checkBackend();
-    if (this.useFallback) return localBackup.getEstablishments(routeId, query);
+    if (this.useFallback) return localBackup.getEstablishments(routeId, query, status);
     try {
       let url = `${API_URL}/establishments`;
       const params = [];
       if (routeId && routeId !== 'All') params.push(`route_id=${routeId}`);
       if (query) params.push(`q=${encodeURIComponent(query)}`);
+      if (status) params.push(`status=${status}`);
       if (params.length > 0) url += `?${params.join('&')}`;
 
       const res = await fetch(url);
@@ -793,9 +797,9 @@ class BackendAPIClient {
         localStorage.setItem('rvs_establishments', JSON.stringify(updatedEstList));
         return data;
       }
-      return localBackup.getEstablishments(routeId, query);
+      return localBackup.getEstablishments(routeId, query, status);
     } catch (e) {
-      return localBackup.getEstablishments(routeId, query);
+      return localBackup.getEstablishments(routeId, query, status);
     }
   }
 
@@ -863,6 +867,65 @@ class BackendAPIClient {
       return await res.json();
     } catch (e) {
       return localBackup.updateEstablishment(id, data);
+    }
+  }
+
+  async approveEstablishment(id) {
+    await this.checkBackend();
+    if (this.useFallback) return localBackup.approveEstablishment(id);
+    try {
+      return await this.updateEstablishment(id, { status: 'active' });
+    } catch (e) {
+      return localBackup.approveEstablishment(id);
+    }
+  }
+
+  async rejectEstablishment(id) {
+    await this.checkBackend();
+    if (this.useFallback) return localBackup.rejectEstablishment(id);
+    try {
+      return await this.deleteEstablishment(id);
+    } catch (e) {
+      return localBackup.rejectEstablishment(id);
+    }
+  }
+
+  async deleteEstablishment(id) {
+    await this.checkBackend();
+    if (this.useFallback) return localBackup.deleteEstablishment(id);
+    try {
+      const res = await fetch(`${API_URL}/establishments/${id}`, {
+        method: 'DELETE'
+      });
+      return await res.json();
+    } catch (e) {
+      return localBackup.deleteEstablishment(id);
+    }
+  }
+
+  async applyPenalty(id, penaltyAmount, remarks) {
+    await this.checkBackend();
+    if (this.useFallback) return localBackup.applyPenalty(id, penaltyAmount, remarks);
+    try {
+      // Fetch the current establishments list to find current penalty
+      const resEst = await fetch(`${API_URL}/establishments`);
+      const ests = await resEst.json();
+      const currentEst = ests.find(e => e.id === id);
+      const currentPenalty = currentEst ? (parseFloat(currentEst.penalty) || 0) : 0;
+      const newPenalty = currentPenalty + (parseFloat(penaltyAmount) || 0);
+      return await this.updateEstablishment(id, { penalty: newPenalty });
+    } catch (e) {
+      return localBackup.applyPenalty(id, penaltyAmount, remarks);
+    }
+  }
+
+  async updateEstablishmentFee(id, newFee) {
+    await this.checkBackend();
+    if (this.useFallback) return localBackup.updateEstablishmentFee(id, newFee);
+    try {
+      return await this.updateEstablishment(id, { monthlyFee: parseFloat(newFee) || 0 });
+    } catch (e) {
+      return localBackup.updateEstablishmentFee(id, newFee);
     }
   }
 

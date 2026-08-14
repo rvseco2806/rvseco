@@ -45,7 +45,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
 
   const fetchTodayRevisits = async () => {
     try {
-      const allEsts = await db.getEstablishments(null);
+      const allEsts = await db.getEstablishments(null, null, 'active');
       const todayStr = new Date().toLocaleDateString('en-CA');
       const revisits = allEsts.filter(e => e.revisitDate === todayStr);
       setTodayRevisits(revisits);
@@ -90,7 +90,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
 
   const fetchEstablishments = async () => {
     try {
-      const list = await db.getEstablishments(activeRouteId, searchQuery);
+      const list = await db.getEstablishments(activeRouteId, searchQuery, 'active');
       setEstablishments(list);
     } catch (err) {
       console.error(err);
@@ -1834,7 +1834,8 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                         monthlyFee: parseFloat(estForm.monthlyFee) || 0,
                         penalty: parseFloat(estForm.penalty) || 0,
                         previousBalance: parseFloat(estForm.previousBalance) || 0,
-                        routeId: estForm.routeId
+                        routeId: estForm.routeId,
+                        status: 'pending'
                       });
                       alert('Establishment registered successfully!');
                       fetchEstablishments();
