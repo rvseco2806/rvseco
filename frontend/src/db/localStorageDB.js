@@ -64,10 +64,26 @@ class LocalStorageDB {
     } catch (e) {
       storedEsts = null;
     }
-    const needsMigration = storedEsts && Array.isArray(storedEsts) && storedEsts.some(e => e.id && e.id.startsWith('GDC '));
-    if (!storedEsts || !Array.isArray(storedEsts) || storedEsts.length === 0 || needsMigration) {
+    if (!storedEsts || !Array.isArray(storedEsts) || storedEsts.length === 0) {
       localStorage.setItem('rvs_establishments', JSON.stringify(establishmentsData));
       storedEsts = establishmentsData;
+    } else {
+      // Migrate legacy IDs to standard format without losing other properties/balances
+      let estsMigrated = false;
+      const migratedEsts = storedEsts.map(e => {
+        if (e.id && e.id.startsWith('GDC ')) {
+          const num = parseInt(e.id.replace('GDC ', ''), 10);
+          if (!isNaN(num)) {
+            e.id = `EST-R1-${String(num).padStart(4, '0')}`;
+            estsMigrated = true;
+          }
+        }
+        return e;
+      });
+      if (estsMigrated) {
+        localStorage.setItem('rvs_establishments', JSON.stringify(migratedEsts));
+        storedEsts = migratedEsts;
+      }
     }
     
     let storedPayments = null;
@@ -759,6 +775,22 @@ class BackendAPIClient {
       const res = await fetch(url);
       const data = await res.json();
       if (Array.isArray(data) && data.length > 0) {
+        // Sync local storage cache with fetched backend data
+        const estList = JSON.parse(localStorage.getItem('rvs_establishments')) || [];
+        const updatedEstList = estList.map(localEst => {
+          const freshEst = data.find(d => d.id === localEst.id);
+          if (freshEst) {
+            return {
+              ...localEst,
+              previousBalance: freshEst.previousBalance,
+              penalty: freshEst.penalty,
+              status: freshEst.status,
+              activePeriodPaid: freshEst.activePeriodPaid
+            };
+          }
+          return localEst;
+        });
+        localStorage.setItem('rvs_establishments', JSON.stringify(updatedEstList));
         return data;
       }
       return localBackup.getEstablishments(routeId, query);
