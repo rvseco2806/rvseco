@@ -58,13 +58,43 @@ class LocalStorageDB {
       const records = generateSeedRecords();
       localStorage.setItem('rvs_records', JSON.stringify(records));
     }
-    const storedEsts = JSON.parse(localStorage.getItem('rvs_establishments'));
-    if (!storedEsts || !Array.isArray(storedEsts) || storedEsts.length === 0) {
-      localStorage.setItem('rvs_establishments', JSON.stringify(establishmentsData));
+    let storedEsts = null;
+    try {
+      storedEsts = JSON.parse(localStorage.getItem('rvs_establishments'));
+    } catch (e) {
+      storedEsts = null;
     }
-    if (!localStorage.getItem('rvs_establishment_payments')) {
+    const needsMigration = storedEsts && Array.isArray(storedEsts) && storedEsts.some(e => e.id && e.id.startsWith('GDC '));
+    if (!storedEsts || !Array.isArray(storedEsts) || storedEsts.length === 0 || needsMigration) {
+      localStorage.setItem('rvs_establishments', JSON.stringify(establishmentsData));
+      storedEsts = establishmentsData;
+    }
+    
+    let storedPayments = null;
+    try {
+      storedPayments = JSON.parse(localStorage.getItem('rvs_establishment_payments'));
+    } catch (e) {
+      storedPayments = null;
+    }
+    if (!storedPayments || !Array.isArray(storedPayments)) {
       const pms = generateSeedEstablishmentPayments(establishmentsData);
       localStorage.setItem('rvs_establishment_payments', JSON.stringify(pms));
+    } else {
+      // Migrate any legacy GDC IDs in local payment records
+      let paymentMigrated = false;
+      const migratedPayments = storedPayments.map(p => {
+        if (p.establishmentId && p.establishmentId.startsWith('GDC ')) {
+          const num = parseInt(p.establishmentId.replace('GDC ', ''), 10);
+          if (!isNaN(num)) {
+            p.establishmentId = `EST-R1-${String(num).padStart(4, '0')}`;
+            paymentMigrated = true;
+          }
+        }
+        return p;
+      });
+      if (paymentMigrated) {
+        localStorage.setItem('rvs_establishment_payments', JSON.stringify(migratedPayments));
+      }
     }
     if (!localStorage.getItem('rvs_users')) {
       localStorage.setItem('rvs_users', JSON.stringify([

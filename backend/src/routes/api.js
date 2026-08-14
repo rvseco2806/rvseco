@@ -508,9 +508,20 @@ router.get('/establishment-payments', async (req, res) => {
   }
 });
 
+const normalizeEstablishmentId = (id) => {
+  if (id && id.startsWith('GDC ')) {
+    const num = parseInt(id.replace('GDC ', ''), 10);
+    if (!isNaN(num)) {
+      return `EST-R1-${String(num).padStart(4, '0')}`;
+    }
+  }
+  return id;
+};
+
 router.post('/establishment-payments', async (req, res) => {
   try {
     const payment = req.body;
+    const targetEstId = normalizeEstablishmentId(payment.establishmentId);
     const today = new Date();
     const yy = String(today.getFullYear()).slice(2);
     const mm = String(today.getMonth() + 1).padStart(2, '0');
@@ -528,7 +539,7 @@ router.post('/establishment-payments', async (req, res) => {
     await run(`INSERT OR IGNORE INTO establishment_payments (
       id, receipt_no, date_time, establishment_id, establishment_name, amount_paid, payment_mode, remarks, collector_name, collector_id, billing_period
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      id, receiptNoFinal, dateTime, payment.establishmentId, payment.establishmentName,
+      id, receiptNoFinal, dateTime, targetEstId, payment.establishmentName,
       parseFloat(payment.amountPaid) || 0, payment.paymentMode, payment.remarks,
       payment.collectorName || 'Srinivas', payment.collectorId || 'CE-0187',
       payment.billingPeriod || null
@@ -538,7 +549,7 @@ router.post('/establishment-payments', async (req, res) => {
     const checkInserted = await query(`SELECT COUNT(*) as count FROM establishment_payments WHERE id = ?`, [id]);
     if (checkInserted[0].count > 0) {
       await run(`UPDATE establishments SET balance = MAX(0, balance - ?) WHERE id = ?`, [
-        parseFloat(payment.amountPaid) || 0, payment.establishmentId
+        parseFloat(payment.amountPaid) || 0, targetEstId
       ]);
     }
 
@@ -546,7 +557,8 @@ router.post('/establishment-payments', async (req, res) => {
       id,
       receiptNo: receiptNoFinal,
       dateTime,
-      ...payment
+      ...payment,
+      establishmentId: targetEstId
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -556,7 +568,8 @@ router.post('/establishment-payments', async (req, res) => {
 router.get('/establishments/:id/payments', async (req, res) => {
   try {
     const { id } = req.params;
-    const rows = await query(`SELECT * FROM establishment_payments WHERE establishment_id = ? ORDER BY date_time DESC`, [id]);
+    const targetId = normalizeEstablishmentId(id);
+    const rows = await query(`SELECT * FROM establishment_payments WHERE establishment_id = ? ORDER BY date_time DESC`, [targetId]);
     res.json(rows.map(r => ({
       id: r.id,
       receiptNo: r.receipt_no,
