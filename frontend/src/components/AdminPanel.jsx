@@ -123,6 +123,7 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
   const [feeSelectedEstId, setFeeSelectedEstId] = useState('');
   const [feeNewAmount, setFeeNewAmount] = useState('');
   const [feeSuccessMsg, setFeeSuccessMsg] = useState('');
+  const [feeSearchQuery, setFeeSearchQuery] = useState('');
 
   // Apply Penalty State
   const [penaltyRoute, setPenaltyRoute] = useState('All');
@@ -130,6 +131,8 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
   const [penaltyAmount, setPenaltyAmount] = useState('');
   const [penaltyRemarks, setPenaltyRemarks] = useState('');
   const [penaltySuccessMsg, setPenaltySuccessMsg] = useState('');
+  const [penaltySearchQuery, setPenaltySearchQuery] = useState('');
+  const [quickPenaltySearchQuery, setQuickPenaltySearchQuery] = useState('');
 
   // Establishment Master Data Management State
   const [estMasterRoute, setEstMasterRoute] = useState('All');
@@ -2758,7 +2761,7 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                     <select
                       className="form-select"
                       value={feeRoute}
-                      onChange={(e) => { setFeeRoute(e.target.value); setFeeSelectedEstId(''); }}
+                      onChange={(e) => { setFeeRoute(e.target.value); setFeeSelectedEstId(''); setFeeSearchQuery(''); }}
                     >
                       <option value="All">— All Routes —</option>
                       {EST_ROUTES.map(r => (
@@ -2770,6 +2773,14 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                   {/* Shop Select */}
                   <div className="form-group">
                     <label className="form-label">2. Select Shop (by Name or ID)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ marginBottom: '8px', fontSize: '0.85rem' }}
+                      placeholder="Type name or ID to search/filter shop..."
+                      value={feeSearchQuery}
+                      onChange={(e) => setFeeSearchQuery(e.target.value)}
+                    />
                     <select
                       className="form-select"
                       value={feeSelectedEstId}
@@ -2781,11 +2792,18 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                       required
                     >
                       <option value="">— Select Establishment —</option>
-                      {getEstsByRoute(feeRoute).filter(e => e.status !== 'pending').map(est => (
-                        <option key={est.id} value={est.id}>
-                          [{est.id}] {est.name} — ₹{est.monthlyFee}/mo
-                        </option>
-                      ))}
+                      {getEstsByRoute(feeRoute)
+                        .filter(e => e.status !== 'pending')
+                        .filter(e => {
+                          if (!feeSearchQuery) return true;
+                          const q = feeSearchQuery.toLowerCase();
+                          return (e.name && e.name.toLowerCase().includes(q)) || (e.id && e.id.toLowerCase().includes(q));
+                        })
+                        .map(est => (
+                          <option key={est.id} value={est.id}>
+                            [{est.id}] {est.name} — ₹{est.monthlyFee}/mo
+                          </option>
+                        ))}
                     </select>
                   </div>
 
@@ -2988,7 +3006,7 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                     <select
                       className="form-select"
                       value={penaltyRoute}
-                      onChange={(e) => { setPenaltyRoute(e.target.value); setPenaltyEstId(''); }}
+                      onChange={(e) => { setPenaltyRoute(e.target.value); setPenaltyEstId(''); setPenaltySearchQuery(''); }}
                     >
                       <option value="All">— All Routes —</option>
                       {EST_ROUTES.map(r => (
@@ -3000,6 +3018,14 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                   {/* Shop Select */}
                   <div className="form-group">
                     <label className="form-label">2. Select Shop (by Name or ID)</label>
+                    <input
+                      type="text"
+                      className="form-input"
+                      style={{ marginBottom: '8px', fontSize: '0.85rem' }}
+                      placeholder="Type name or ID to search/filter shop..."
+                      value={penaltySearchQuery}
+                      onChange={(e) => setPenaltySearchQuery(e.target.value)}
+                    />
                     <select
                       className="form-select"
                       value={penaltyEstId}
@@ -3007,11 +3033,18 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                       required
                     >
                       <option value="">— Select Establishment —</option>
-                      {getEstsByRoute(penaltyRoute).filter(e => e.status !== 'pending').map(est => (
-                        <option key={est.id} value={est.id}>
-                          [{est.id}] {est.name} (penalty: ₹{est.penalty || 0})
-                        </option>
-                      ))}
+                      {getEstsByRoute(penaltyRoute)
+                        .filter(e => e.status !== 'pending')
+                        .filter(e => {
+                          if (!penaltySearchQuery) return true;
+                          const q = penaltySearchQuery.toLowerCase();
+                          return (e.name && e.name.toLowerCase().includes(q)) || (e.id && e.id.toLowerCase().includes(q));
+                        })
+                        .map(est => (
+                          <option key={est.id} value={est.id}>
+                            [{est.id}] {est.name} (penalty: ₹{est.penalty || 0})
+                          </option>
+                        ))}
                     </select>
                   </div>
 
@@ -3997,8 +4030,16 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                     </div>
 
                     <form onSubmit={handleApplyPenalty} style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxWidth: '500px' }}>
-                      <div className="form-group">
+                       <div className="form-group">
                         <label className="form-label" style={{ fontWeight: 700, fontSize: '0.75rem' }}>Select Establishment</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          style={{ marginBottom: '8px', padding: '10px', fontSize: '0.85rem' }}
+                          placeholder="Type name or ID to search..."
+                          value={quickPenaltySearchQuery}
+                          onChange={(e) => setQuickPenaltySearchQuery(e.target.value)}
+                        />
                         <select 
                           className="form-select" 
                           value={penaltyEstId}
@@ -4007,11 +4048,17 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                           style={{ padding: '10px', fontSize: '0.85rem', backgroundColor: '#ffffff' }}
                         >
                           <option value="">-- Choose Business --</option>
-                          {establishmentsList.map(est => (
-                            <option key={est.id} value={est.id}>
-                              {est.name} ({est.routeName}) - Bal: ₹{est.previousBalance + est.monthlyFee + est.penalty}
-                            </option>
-                          ))}
+                          {establishmentsList
+                            .filter(e => {
+                              if (!quickPenaltySearchQuery) return true;
+                              const q = quickPenaltySearchQuery.toLowerCase();
+                              return (e.name && e.name.toLowerCase().includes(q)) || (e.id && e.id.toLowerCase().includes(q));
+                            })
+                            .map(est => (
+                              <option key={est.id} value={est.id}>
+                                {est.name} ({est.routeName}) - Bal: ₹{est.previousBalance + est.monthlyFee + est.penalty}
+                              </option>
+                            ))}
                         </select>
                       </div>
 
