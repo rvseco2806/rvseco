@@ -53,6 +53,8 @@ function toPgSql(sql) {
     let conflictTarget = 'id';
     if (converted.toLowerCase().includes('into rates')) {
       conflictTarget = 'key';
+    } else if (converted.toLowerCase().includes('into users')) {
+      conflictTarget = 'username';
     } else if (converted.toLowerCase().includes('into drivers')) {
       conflictTarget = 'name';
     } else if (converted.toLowerCase().includes('into vehicles')) {
