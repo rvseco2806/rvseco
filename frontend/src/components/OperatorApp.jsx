@@ -158,7 +158,7 @@ export default function OperatorApp({ onLogout, currentRates, onNewEntrySaved, o
         alert('Your account has been deactivated. Please contact the Admin.');
         return;
       }
-      if (matchedUser.role === 'admin') {
+      if (matchedUser.role && matchedUser.role.startsWith('admin')) {
         if (onAdminLogin) onAdminLogin();
       } else {
         setStep('dashboard');

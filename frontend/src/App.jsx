@@ -53,22 +53,27 @@ export default function App() {
       
       <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
         
-        {/* LANDING WELCOME SCREEN */}
         {activeService === 'landing' && (
           <LandingScreen onLoginSuccess={(user) => {
             setCurrentUser(user);
-            if (user.role === 'admin_drcc') {
+            const roleStr = (user.role || '').toLowerCase();
+            const usernameStr = (user.username || '').toLowerCase();
+
+            const isDrcc = roleStr.endsWith('_drcc') || usernameStr.endsWith('_drcc');
+            const isEst = roleStr.endsWith('_est') || usernameStr.endsWith('_est');
+            const isAdmin = roleStr.startsWith('admin') || usernameStr.startsWith('admin');
+
+            if (isDrcc) {
               setActiveService('drcc');
-              setRole('admin');
-            } else if (user.role === 'admin_est') {
-              setActiveService('establishments_admin');
-              setRole('admin');
-            } else if (user.role === 'operator_drcc') {
-              setActiveService('drcc');
-              setRole('operator');
-            } else if (user.role === 'operator_est') {
-              setActiveService('establishments');
-              setRole('operator');
+              setRole(isAdmin ? 'admin' : 'operator');
+            } else if (isEst) {
+              if (isAdmin) {
+                setActiveService('establishments_admin');
+                setRole('admin');
+              } else {
+                setActiveService('establishments');
+                setRole('operator');
+              }
             }
           }} />
         )}
