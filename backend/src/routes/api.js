@@ -219,15 +219,16 @@ router.post('/records', async (req, res) => {
     const nextSeq = String(matches[0].count + 1).padStart(4, '0');
     const receiptNo = `${datePrefix}${nextSeq}`;
 
-    const id = receiptNo;
-    const dateTime = new Date().toISOString();
-    const status = 'Completed';
+    const id = record.id || receiptNo;
+    const receiptNoFinal = record.receiptNo || receiptNo;
+    const dateTime = record.dateTime || new Date().toISOString();
+    const status = record.status || 'Completed';
 
-    await run(`INSERT INTO records (
+    await run(`INSERT OR IGNORE INTO records (
       id, receipt_no, date_time, division, division_name, vehicle_type, vehicle_no, driver,
       plastic, cardboard, glass, others, total_weight, total_amount, amount_paid, balance_amount, rates_used, gps, status
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      id, receiptNo, dateTime, record.division, record.divisionName, record.vehicleType, record.vehicleNo, record.driver,
+      id, receiptNoFinal, dateTime, record.division, record.divisionName, record.vehicleType, record.vehicleNo, record.driver,
       parseFloat(record.plastic) || 0, parseFloat(record.cardboard) || 0, parseFloat(record.glass) || 0, parseFloat(record.others) || 0,
       parseFloat(record.totalWeight) || 0, parseFloat(record.totalAmount) || 0,
       parseFloat(record.amountPaid) || 0, parseFloat(record.balanceAmount) || 0,
@@ -236,7 +237,7 @@ router.post('/records', async (req, res) => {
 
     res.json({
       id,
-      receiptNo,
+      receiptNo: receiptNoFinal,
       dateTime,
       status,
       ...record
@@ -513,26 +514,30 @@ router.post('/establishment-payments', async (req, res) => {
     const nextSeq = String(matches[0].count + 1).padStart(4, '0');
     const receiptNo = `${datePrefix}${nextSeq}`;
 
-    const id = receiptNo;
-    const dateTime = new Date().toISOString();
+    const id = payment.id || receiptNo;
+    const receiptNoFinal = payment.receiptNo || receiptNo;
+    const dateTime = payment.dateTime || new Date().toISOString();
 
-    await run(`INSERT INTO establishment_payments (
+    await run(`INSERT OR IGNORE INTO establishment_payments (
       id, receipt_no, date_time, establishment_id, establishment_name, amount_paid, payment_mode, remarks, collector_name, collector_id, billing_period
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
-      id, receiptNo, dateTime, payment.establishmentId, payment.establishmentName,
+      id, receiptNoFinal, dateTime, payment.establishmentId, payment.establishmentName,
       parseFloat(payment.amountPaid) || 0, payment.paymentMode, payment.remarks,
       payment.collectorName || 'Srinivas', payment.collectorId || 'CE-0187',
       payment.billingPeriod || null
     ]);
 
-    // Update establishment balance after payment
-    await run(`UPDATE establishments SET balance = MAX(0, balance - ?) WHERE id = ?`, [
-      parseFloat(payment.amountPaid) || 0, payment.establishmentId
-    ]);
+    // Update establishment balance after payment (only if it wasn't ignored/duplicate)
+    const checkInserted = await query(`SELECT COUNT(*) as count FROM establishment_payments WHERE id = ?`, [id]);
+    if (checkInserted[0].count > 0) {
+      await run(`UPDATE establishments SET balance = MAX(0, balance - ?) WHERE id = ?`, [
+        parseFloat(payment.amountPaid) || 0, payment.establishmentId
+      ]);
+    }
 
     res.json({
       id,
-      receiptNo,
+      receiptNo: receiptNoFinal,
       dateTime,
       ...payment
     });

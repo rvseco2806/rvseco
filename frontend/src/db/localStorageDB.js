@@ -480,13 +480,74 @@ const localBackup = new LocalStorageDB();
 class BackendAPIClient {
   constructor() {
     this.useFallback = false;
+    this.isSyncing = false;
+    this.lastSyncTime = 0;
+  }
+
+  async syncOfflineData() {
+    try {
+      // 1. Sync DRCC records
+      const offlineRecords = localBackup.getRecords();
+      if (offlineRecords.length > 0) {
+        const syncedRecordIds = JSON.parse(localStorage.getItem('rvs_synced_record_ids')) || [];
+        for (const record of offlineRecords) {
+          if (!syncedRecordIds.includes(record.id)) {
+            try {
+              const res = await fetch(`${API_URL}/records`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(record)
+              });
+              if (res.ok) {
+                syncedRecordIds.push(record.id);
+              }
+            } catch (e) {
+              console.error("Failed to sync record:", record.id, e);
+            }
+          }
+        }
+        localStorage.setItem('rvs_synced_record_ids', JSON.stringify(syncedRecordIds));
+      }
+
+      // 2. Sync Establishment payments
+      const offlinePayments = localBackup.getEstablishmentPaymentsAll();
+      if (offlinePayments.length > 0) {
+        const syncedPaymentIds = JSON.parse(localStorage.getItem('rvs_synced_payment_ids')) || [];
+        for (const payment of offlinePayments) {
+          if (!syncedPaymentIds.includes(payment.id)) {
+            try {
+              const res = await fetch(`${API_URL}/establishment-payments`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payment)
+              });
+              if (res.ok) {
+                syncedPaymentIds.push(payment.id);
+              }
+            } catch (e) {
+              console.error("Failed to sync payment:", payment.id, e);
+            }
+          }
+        }
+        localStorage.setItem('rvs_synced_payment_ids', JSON.stringify(syncedPaymentIds));
+      }
+    } catch (e) {
+      console.error("Offline sync failed:", e);
+    }
   }
 
   async checkBackend() {
     try {
       const res = await fetch(`${API_URL}/rates`, { method: 'HEAD' });
-      // If server is not running or returns non-2xx status, fallback to localStorage
-      this.useFallback = !res.ok;
+      const online = res.ok;
+      this.useFallback = !online;
+      if (online && !this.isSyncing && Date.now() - this.lastSyncTime > 15000) {
+        this.isSyncing = true;
+        this.syncOfflineData().finally(() => {
+          this.isSyncing = false;
+          this.lastSyncTime = Date.now();
+        });
+      }
     } catch (err) {
       this.useFallback = true;
     }
