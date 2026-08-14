@@ -1651,8 +1651,20 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                     value={estDateRange}
                     onChange={(e) => setEstDateRange(e.target.value)}
                   >
-                    <option value="today">Today (26-Jun-2026)</option>
-                    <option value="7days">Last 7 Days (19 Jun - 26 Jun)</option>
+                    <option value="today">Today ({(() => {
+                      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const d = new Date();
+                      return `${String(d.getDate()).padStart(2, '0')}-${months[d.getMonth()]}-${d.getFullYear()}`;
+                    })()})</option>
+                    <option value="7days">Last 7 Days ({(() => {
+                      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const today = new Date();
+                      const past = new Date();
+                      past.setDate(today.getDate() - 7);
+                      const startDay = String(past.getDate()).padStart(2, '0');
+                      const endDay = String(today.getDate()).padStart(2, '0');
+                      return `${startDay} ${months[past.getMonth()]} - ${endDay} ${months[today.getMonth()]}`;
+                    })()})</option>
                   </select>
                 </div>
                 
