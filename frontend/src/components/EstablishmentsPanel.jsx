@@ -290,8 +290,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
               </div>
             </div>
 
-            {/* Dashboard Content */}
-            <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+            <div className="establishments-content" style={{ gap: '16px', overflowY: 'auto' }}>
               
               {/* Today's Revisit Notification Banner */}
               {todayRevisits.length > 0 && (
@@ -431,7 +430,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
               </div>
  
               {/* Recent Summary List */}
-              <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '60px' }}>
+              <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', marginBottom: '94px' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#0f172a' }}>Recent Summary</span>
                   <span style={{ fontSize: '0.7rem', color: '#3b82f6', fontWeight: 700, cursor: 'pointer' }} onClick={() => setScreen(8)}>View All</span>
@@ -486,7 +485,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
             </div>
 
             {/* Bottom Tab Bar */}
-            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-around', padding: '8px 0', zIndex: 10 }}>
+            <div style={{ position: 'absolute', bottom: 0, left: 0, width: '100%', backgroundColor: '#ffffff', borderTop: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-around', padding: '8px 0 32px 0', zIndex: 10 }}>
               <div style={{ textAlign: 'center', color: '#0c5c37', cursor: 'pointer' }}>
                 <div style={{ display: 'flex', justifyContent: 'center' }}><Check size={18} /></div>
                 <div style={{ fontSize: '0.6rem', fontWeight: 700, marginTop: '2px' }}>Home</div>
@@ -542,7 +541,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
             </div>
 
             {/* Search Results */}
-            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="establishments-content" style={{ gap: '10px', overflowY: 'auto' }}>
               {establishments.length > 0 ? (
                 establishments.map(est => {
                   const totalDue = Math.max(0, est.monthlyFee - (est.activePeriodPaid || 0)) + est.penalty + est.previousBalance;
@@ -625,7 +624,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
               <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>Establishment Details</span>
             </div>
 
-            <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+            <div className="establishments-content" style={{ gap: '16px', overflowY: 'auto' }}>
               
               {/* Profile Card */}
               <div style={{ backgroundColor: '#ffffff', borderRadius: '12px', padding: '16px', border: '1px solid #e2e8f0', textAlign: 'center' }}>
@@ -915,7 +914,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
               <span style={{ fontWeight: 800, fontSize: '0.95rem' }}>Collect Payment</span>
             </div>
 
-            <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '16px', overflowY: 'auto' }}>
+            <div className="establishments-content" style={{ gap: '16px', overflowY: 'auto' }}>
               
               {/* Est ID */}
               <div style={{ backgroundColor: '#f8fafc', borderRadius: '8px', padding: '12px', border: '1px solid #e2e8f0', display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -1490,7 +1489,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
 
             {/* History Tab Contents */}
             {historyTab === 'history' ? (
-              <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div className="establishments-content" style={{ gap: '10px', overflowY: 'auto' }}>
                 {paymentHistory.length > 0 ? (
                   paymentHistory.map((p, idx) => (
                     <div key={p.id || idx} style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '12px', border: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1514,7 +1513,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                 )}
               </div>
             ) : (
-              <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <div className="establishments-content" style={{ gap: '10px', overflowY: 'auto' }}>
                 <div style={{ backgroundColor: '#ffffff', borderRadius: '10px', padding: '14px', border: '1px solid #e2e8f0' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', fontWeight: 'bold', color: '#64748b', borderBottom: '1px solid #e2e8f0', paddingBottom: '6px', marginBottom: '8px' }}>
                     <span>Transaction / Date</span>
@@ -1600,7 +1599,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
             </div>
 
             {/* Receipts List */}
-            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div className="establishments-content" style={{ gap: '10px', overflowY: 'auto' }}>
               {allPayments && allPayments.length > 0 ? (
                 allPayments
                   .filter(p => {
@@ -1724,7 +1723,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
             </div>
 
             {/* Form */}
-            <div style={{ flex: 1, padding: '16px', display: 'flex', flexDirection: 'column', gap: '14px', overflowY: 'auto' }}>
+            <div className="establishments-content" style={{ gap: '14px', overflowY: 'auto' }}>
               
               <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
                 <label style={{ fontSize: '0.7rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>Business Name *</label>

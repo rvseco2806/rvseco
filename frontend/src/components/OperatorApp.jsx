@@ -415,7 +415,7 @@ export default function OperatorApp({ onLogout, currentRates, onNewEntrySaved, o
             </div>
           </div>
 
-          <div className="operator-content animate-fade-in" style={{ paddingBottom: '70px' }}>
+          <div className="operator-content animate-fade-in" style={{ paddingBottom: '94px' }}>
             {/* Today's Date */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '0.85rem' }}>
               <span style={{ color: '#64748b', fontWeight: 500 }}>Today's Date</span>
@@ -492,7 +492,7 @@ export default function OperatorApp({ onLogout, currentRates, onNewEntrySaved, o
             width: '100%', 
             background: '#ffffff', 
             borderTop: '1px solid #e2e8f0', 
-            padding: '10px 16px',
+            padding: '10px 16px 34px 16px',
             display: 'flex',
             justifyContent: 'space-around',
             gap: '12px',

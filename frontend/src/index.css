@@ -302,11 +302,21 @@ h1, h2, h3, h4, h5, h6 {
 
 .operator-content {
   flex: 1;
-  padding: 16px;
+  padding: 16px 16px 40px 16px;
   display: flex;
   flex-direction: column;
   gap: 16px;
+  box-sizing: border-box;
 }
+
+.establishments-content {
+  flex: 1;
+  padding: 16px 16px 40px 16px !important;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+}
+
 
 /* Operator Buttons */
 .btn-primary {
