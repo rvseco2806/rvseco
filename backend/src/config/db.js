@@ -1,50 +1,112 @@
 import sqlite3 from 'sqlite3';
+import pg from 'pg';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
+import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const dbPath = process.env.DATABASE_PATH || path.resolve(__dirname, '../../../rvseco.db');
-const dbDir = path.dirname(dbPath);
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
+
+// Load environment variables
+dotenv.config({ path: path.resolve(__dirname, '../../.env') });
+
+const isPostgres = !!(
+  process.env.DATABASE_URL &&
+  (process.env.DATABASE_URL.startsWith('postgres://') || process.env.DATABASE_URL.startsWith('postgresql://'))
+);
+
+let pgPool = null;
+let sqliteDb = null;
+
+if (isPostgres) {
+  console.log('Connecting to PostgreSQL database at:', process.env.DATABASE_URL.split('@')[1] || 'Supabase');
+  pgPool = new pg.Pool({
+    connectionString: process.env.DATABASE_URL,
+    ssl: {
+      rejectUnauthorized: false
+    }
+  });
+} else {
+  const dbPath = process.env.DATABASE_PATH || path.resolve(__dirname, '../../../rvseco.db');
+  const dbDir = path.dirname(dbPath);
+  if (!fs.existsSync(dbDir)) {
+    fs.mkdirSync(dbDir, { recursive: true });
+  }
+  console.log('Connecting to SQLite database at:', dbPath);
+  sqliteDb = new sqlite3.Database(dbPath, (err) => {
+    if (err) {
+      console.error('Error opening SQLite database:', err.message);
+    }
+  });
 }
 
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error('Error opening database:', err.message);
-  } else {
-    console.log('Connected to the SQLite database at:', dbPath);
+// Convert SQLite compatible queries to PostgreSQL
+function toPgSql(sql) {
+  let index = 1;
+  let converted = sql.replace(/\?/g, () => `$${index++}`);
+  
+  if (converted.toUpperCase().includes('INSERT OR IGNORE INTO')) {
+    converted = converted.replace(/INSERT OR IGNORE INTO/gi, 'INSERT INTO');
+    
+    // Auto-detect target conflict constraint
+    let conflictTarget = 'id';
+    if (converted.toLowerCase().includes('into rates')) {
+      conflictTarget = 'key';
+    } else if (converted.toLowerCase().includes('into drivers')) {
+      conflictTarget = 'name';
+    } else if (converted.toLowerCase().includes('into vehicles')) {
+      conflictTarget = 'number';
+    }
+    converted += ` ON CONFLICT (${conflictTarget}) DO NOTHING`;
   }
-});
+  
+  // Convert MAX(0, balance - ?) to GREATEST(0, balance - $1)
+  converted = converted.replace(/MAX\s*\(\s*0\s*,\s*/gi, 'GREATEST(0, ');
+  return converted;
+}
 
 // Helper to run database queries using Promises
-export const query = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows);
+export const query = async (sql, params = []) => {
+  if (isPostgres) {
+    const res = await pgPool.query(toPgSql(sql), params);
+    return res.rows;
+  } else {
+    return new Promise((resolve, reject) => {
+      sqliteDb.all(sql, params, (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
     });
-  });
+  }
 };
 
-export const run = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, function (err) {
-      if (err) reject(err);
-      else resolve({ id: this.lastID, changes: this.changes });
+export const run = async (sql, params = []) => {
+  if (isPostgres) {
+    const res = await pgPool.query(toPgSql(sql), params);
+    return { id: null, changes: res.rowCount };
+  } else {
+    return new Promise((resolve, reject) => {
+      sqliteDb.run(sql, params, function (err) {
+        if (err) reject(err);
+        else resolve({ id: this.lastID, changes: this.changes });
+      });
     });
-  });
+  }
 };
 
-export const get = (sql, params = []) => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) reject(err);
-      else resolve(row);
+export const get = async (sql, params = []) => {
+  if (isPostgres) {
+    const res = await pgPool.query(toPgSql(sql), params);
+    return res.rows[0];
+  } else {
+    return new Promise((resolve, reject) => {
+      sqliteDb.get(sql, params, (err, row) => {
+        if (err) reject(err);
+        else resolve(row);
+      });
     });
-  });
+  }
 };
 
 // Initialize and seed tables
@@ -80,7 +142,6 @@ export const initDb = async () => {
       division TEXT
     )`);
 
-
     // 4. Create Drivers table
     await run(`CREATE TABLE IF NOT EXISTS drivers (
       name TEXT PRIMARY KEY,
@@ -104,22 +165,14 @@ export const initDb = async () => {
       others REAL,
       total_weight REAL,
       total_amount REAL,
+      amount_paid REAL,
+      balance_amount REAL,
       rates_used TEXT,
       gps TEXT,
       status TEXT
     )`);
 
-    // Self-healing migrations for additional payment columns
-    await run(`ALTER TABLE records ADD COLUMN amount_paid REAL DEFAULT 0`).catch(() => {});
-    await run(`ALTER TABLE records ADD COLUMN balance_amount REAL DEFAULT 0`).catch(() => {});
-    await run(`ALTER TABLE vehicles ADD COLUMN division TEXT`).catch(() => {});
-    await run(`ALTER TABLE establishments ADD COLUMN status TEXT DEFAULT 'active'`).catch(() => {});
-    await run(`ALTER TABLE establishments ADD COLUMN revisit_date TEXT`).catch(() => {});
-    await run(`ALTER TABLE establishments ADD COLUMN last_billed_month TEXT`).catch(() => {});
-    await run(`ALTER TABLE establishment_payments ADD COLUMN billing_period TEXT`).catch(() => {});
-    await run(`UPDATE establishments SET status = 'inactive' WHERE monthly_fee = 0 OR monthly_fee IS NULL`).catch(() => {});
-
-    // 6. Create Establishments table
+    // Create Establishments table
     await run(`CREATE TABLE IF NOT EXISTS establishments (
       id TEXT PRIMARY KEY,
       name TEXT,
@@ -130,12 +183,11 @@ export const initDb = async () => {
       balance REAL,
       route_id INTEGER,
       route_name TEXT,
-      status TEXT DEFAULT 'active',
-      revisit_date TEXT,
+      status TEXT,
       last_billed_month TEXT
     )`);
 
-    // 7. Create Establishment Payments table
+    // Create Establishment Payments table
     await run(`CREATE TABLE IF NOT EXISTS establishment_payments (
       id TEXT PRIMARY KEY,
       receipt_no TEXT,
@@ -150,17 +202,15 @@ export const initDb = async () => {
       billing_period TEXT
     )`);
 
-
     // --- SEED INITIAL DATA IF EMPTY ---
     
     // Seed Rates
     const ratesCount = await get(`SELECT COUNT(*) as count FROM rates`);
-    if (ratesCount.count === 0) {
-      await run(`INSERT INTO rates (key, value) VALUES 
-        ('plastic', 16.0),
-        ('cardboard', 10.0),
-        ('glass', 3.0),
-        ('others', 3.0)`);
+    if (ratesCount.count == 0) {
+      await run(`INSERT INTO rates (key, value) VALUES ('plastic', 16.0)`);
+      await run(`INSERT INTO rates (key, value) VALUES ('cardboard', 10.0)`);
+      await run(`INSERT INTO rates (key, value) VALUES ('glass', 3.0)`);
+      await run(`INSERT INTO rates (key, value) VALUES ('others', 3.0)`);
       console.log('Seeded default rates.');
     }
     await run(`UPDATE rates SET value = 3.0 WHERE key = 'others' AND value = 4.0`);
@@ -169,11 +219,10 @@ export const initDb = async () => {
     await run(`INSERT OR IGNORE INTO rates (key, value) VALUES ('others_blackplastic', 3.0)`);
 
     // Seed Users
-    await run(`INSERT OR IGNORE INTO users (username, password, role, status) VALUES 
-      ('admin_drcc', 'admin123', 'admin_drcc', 'active'),
-      ('admin_est', 'admin123', 'admin_est', 'active'),
-      ('operator_drcc', 'operator123', 'operator_drcc', 'active'),
-      ('operator_est', 'operator123', 'operator_est', 'active')`);
+    await run(`INSERT OR IGNORE INTO users (username, password, role, status) VALUES ('admin_drcc', 'admin123', 'admin_drcc', 'active')`);
+    await run(`INSERT OR IGNORE INTO users (username, password, role, status) VALUES ('admin_est', 'admin123', 'admin_est', 'active')`);
+    await run(`INSERT OR IGNORE INTO users (username, password, role, status) VALUES ('operator_drcc', 'operator123', 'operator_drcc', 'active')`);
+    await run(`INSERT OR IGNORE INTO users (username, password, role, status) VALUES ('operator_est', 'operator123', 'operator_est', 'active')`);
     console.log('Ensured default users are seeded.');
 
     // Migrate all division names and records to uniform Division-X format
@@ -184,7 +233,7 @@ export const initDb = async () => {
 
     // Seed Divisions
     const divisionsCount = await get(`SELECT COUNT(*) as count FROM divisions`);
-    if (divisionsCount.count === 0) {
+    if (divisionsCount.count == 0) {
       const defaultDivisions = [
         { id: '43', name: 'Division-43', vehicles: 3, active_vehicles: 3 },
         { id: '44', name: 'Division-44', vehicles: 4, active_vehicles: 3 },
@@ -203,10 +252,9 @@ export const initDb = async () => {
     // Seed Vehicles and Drivers skipped (custom Excel data used instead)
     console.log('Dummy vehicle and driver seeding skipped to prioritize Excel import.');
 
-
     // Seed Records (including June 20 operator table records & 51 June 26 dashboard records)
     const recordsCount = await get(`SELECT COUNT(*) as count FROM records`);
-    if (recordsCount.count === 0) {
+    if (recordsCount.count == 0) {
       const seedRecords = generateSeedRecords();
       for (const r of seedRecords) {
         await run(`INSERT INTO records (
@@ -223,7 +271,7 @@ export const initDb = async () => {
 
     // Seed Establishments from JSON if empty
     const establishmentsCount = await get(`SELECT COUNT(*) as count FROM establishments`);
-    if (establishmentsCount.count === 0) {
+    if (establishmentsCount.count == 0) {
       try {
         const jsonPath = path.resolve(__dirname, 'establishments.json');
         if (fs.existsSync(jsonPath)) {
@@ -231,34 +279,24 @@ export const initDb = async () => {
           const ests = JSON.parse(rawData);
           console.log(`Seeding ${ests.length} establishments from JSON...`);
           
-          await new Promise((resolve, reject) => {
-            db.serialize(() => {
-              const stmt = db.prepare(`INSERT INTO establishments (
-                id, name, proprietor, phone, monthly_fee, penalty, balance, route_id, route_name, status, last_billed_month
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`);
-              
-              const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
-              ests.forEach(e => {
-                stmt.run(
-                  e.id,
-                  e.name,
-                  e.proprietor || '',
-                  e.phone || '',
-                  parseFloat(e.monthlyFee) || 0,
-                  parseFloat(e.penalty) || 0,
-                  parseFloat(e.previousBalance) || 0,
-                  parseInt(e.routeId) || 1,
-                  e.routeName,
-                  e.status || 'active',
-                  e.lastBilledMonth || currentMonthKey
-                );
-              });
-              stmt.finalize((err) => {
-                if (err) reject(err);
-                else resolve();
-              });
-            });
-          });
+          const currentMonthKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`;
+          for (const e of ests) {
+            await run(`INSERT INTO establishments (
+              id, name, proprietor, phone, monthly_fee, penalty, balance, route_id, route_name, status, last_billed_month
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
+              e.id,
+              e.name,
+              e.proprietor || '',
+              e.phone || '',
+              parseFloat(e.monthlyFee) || 0,
+              parseFloat(e.penalty) || 0,
+              parseFloat(e.previousBalance) || 0,
+              parseInt(e.routeId) || 1,
+              e.routeName,
+              e.status || 'active',
+              e.lastBilledMonth || currentMonthKey
+            ]);
+          }
           console.log('Finished seeding establishments.');
         } else {
           console.log('establishments.json seed file not found, skipping seeding.');
@@ -270,10 +308,10 @@ export const initDb = async () => {
 
     // Seed Establishment Payments if empty
     const paymentsCount = await get(`SELECT COUNT(*) as count FROM establishment_payments`);
-    if (paymentsCount.count === 0) {
+    if (paymentsCount.count == 0) {
       const ests = await query(`SELECT * FROM establishments WHERE monthly_fee > 0`);
       if (ests.length > 0) {
-        console.log('Seeding establishment payments in SQLite...');
+        console.log('Seeding establishment payments...');
         const seedPmts = generateSeedEstablishmentPayments(ests.map(e => ({
           id: e.id,
           name: e.name,
@@ -305,5 +343,3 @@ const generateSeedRecords = () => {
 const generateSeedEstablishmentPayments = (establishments) => {
   return [];
 };
-
-export default db;
