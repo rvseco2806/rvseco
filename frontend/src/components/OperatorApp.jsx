@@ -44,6 +44,9 @@ export default function OperatorApp({ onLogout, currentRates, onNewEntrySaved, o
   // Driver previous balance state
   const [driverPrevBalance, setDriverPrevBalance] = useState(0);
 
+  // Saving state
+  const [isSaving, setIsSaving] = useState(false);
+
   // Others material subtype: 'others', 'others_iron', 'others_babybox', 'others_blackplastic'
   const [othersSubtype, setOthersSubtype] = useState('others');
 
@@ -221,10 +224,17 @@ export default function OperatorApp({ onLogout, currentRates, onNewEntrySaved, o
   ) / 100;
 
   const handleConfirmAndSave = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
+
     const paidNum = parseFloat(amountPaid) || 0;
     const balNum = Math.round(((grandInputTotal + driverPrevBalance) - paidNum) * 100) / 100;
 
+    // Generate a unique client-side ID to enforce backend idempotency
+    const uniqueRecordId = 'DRCC-rec-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
+
     const record = {
+      id: uniqueRecordId,
       division: selectedDivision,
       divisionName: activeDivData?.name || '',
       vehicleType: selectedVehicleType,
@@ -251,15 +261,21 @@ export default function OperatorApp({ onLogout, currentRates, onNewEntrySaved, o
       gps: gpsCoords || { lat: 17.2473, lng: 80.1514 }
     };
 
-    const saved = await db.addRecord(record);
-    setLatestReceipt(saved);
-    setSearchDate(new Date().toLocaleDateString('en-CA'));
-    await loadTodayData();
-    
-    // Notify parent to update charts/stats if dashboard is open
-    if (onNewEntrySaved) onNewEntrySaved();
+    try {
+      const saved = await db.addRecord(record);
+      setLatestReceipt(saved);
+      setSearchDate(new Date().toLocaleDateString('en-CA'));
+      await loadTodayData();
+      
+      // Notify parent to update charts/stats if dashboard is open
+      if (onNewEntrySaved) onNewEntrySaved();
 
-    setStep('success');
+      setStep('success');
+    } catch (err) {
+      alert("Error saving record: " + err.message);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const resetNewEntryForm = () => {
@@ -1174,8 +1190,9 @@ export default function OperatorApp({ onLogout, currentRates, onNewEntrySaved, o
                 className="btn-primary" 
                 style={{ flex: 2, padding: '14px' }}
                 onClick={handleConfirmAndSave}
+                disabled={isSaving}
               >
-                CONFIRM & SAVE
+                {isSaving ? 'SAVING...' : 'CONFIRM & SAVE'}
               </button>
             </div>
           </div>
