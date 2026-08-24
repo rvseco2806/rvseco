@@ -247,6 +247,17 @@ router.post('/records', async (req, res) => {
   }
 });
 
+router.delete('/records/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    await run(`DELETE FROM records WHERE id = ?`, [id]);
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+
 // Helper to process monthly arrears carry-forward
 const processRowArrears = async (r) => {
   if (!r || r.status === 'inactive' || !r.monthly_fee || r.monthly_fee <= 0) {
@@ -523,6 +534,30 @@ router.get('/establishment-payments', async (req, res) => {
       collectorId: r.collector_id,
       billingPeriod: r.billing_period
     })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/establishment-payments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    // 1. Fetch payment details
+    const payment = await get(`SELECT * FROM establishment_payments WHERE id = ?`, [id]);
+    if (!payment) {
+      return res.status(404).json({ error: 'Payment record not found' });
+    }
+    
+    // 2. Delete payment record
+    await run(`DELETE FROM establishment_payments WHERE id = ?`, [id]);
+    
+    // 3. Revert establishment balance
+    await run(`UPDATE establishments SET balance = balance + ? WHERE id = ?`, [
+      parseFloat(payment.amount_paid) || 0,
+      payment.establishment_id
+    ]);
+    
+    res.json({ success: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

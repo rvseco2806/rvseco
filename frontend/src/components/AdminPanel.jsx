@@ -118,6 +118,12 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
   const [estActiveAction, setEstActiveAction] = useState('update-fees');
   const [estAdminSearch, setEstAdminSearch] = useState('');
 
+  // Establishment Payments Records Filtering State
+  const [estFilterDate, setEstFilterDate] = useState(() => new Date().toLocaleDateString('en-CA'));
+  const [estFilterRoute, setEstFilterRoute] = useState('All');
+  const [estFilterSearch, setEstFilterSearch] = useState('');
+  const [estFilterSearchResults, setEstFilterSearchResults] = useState([]);
+
   // Fix/Update User Fee State
   const [feeRoute, setFeeRoute] = useState('All');
   const [feeSelectedEstId, setFeeSelectedEstId] = useState('');
@@ -195,6 +201,10 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
       setEstablishmentsList(ests || []);
       const pmts = await db.getEstablishmentPaymentsAll();
       setEstablishmentPaymentsList(pmts || []);
+      
+      const localToday = new Date().toLocaleDateString('en-CA');
+      setEstFilterDate(localToday);
+      setEstFilterSearchResults((pmts || []).filter(p => p.dateTime.startsWith(localToday)));
     } catch (err) {
       console.error('Error loading establishments data in admin panel:', err);
     }
@@ -743,6 +753,97 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
     }
   };
 
+  const handleDeleteRecord = async (id, receiptNo) => {
+    if (!window.confirm(`Are you sure you want to delete the DRCC collection record with Receipt No: ${receiptNo}? This action cannot be undone.`)) {
+      return;
+    }
+    try {
+      await db.deleteRecord(id);
+      addLog(`Deleted DRCC Collection Record: ${receiptNo}`);
+      
+      // Reload records
+      const recs = await db.getRecords();
+      setRecords(recs);
+      
+      // Update filtered results
+      if (filterDate) {
+        setRecordSearchResults(recs.filter(r => r.dateTime.startsWith(filterDate)));
+      } else {
+        setRecordSearchResults(recs);
+      }
+      alert('Record deleted successfully.');
+    } catch (err) {
+      console.error(err);
+      alert('Error deleting record: ' + err.message);
+    }
+  };
+
+  const handleEstPaymentSearch = () => {
+    let results = establishmentPaymentsList;
+    if (estFilterDate) {
+      results = results.filter(p => p.dateTime.startsWith(estFilterDate));
+    }
+    if (estFilterRoute !== 'All') {
+      results = results.filter(p => {
+        const est = establishmentsList.find(e => e.id === p.establishmentId);
+        return est && String(est.routeId) === String(estFilterRoute);
+      });
+    }
+    if (estFilterSearch.trim()) {
+      const q = estFilterSearch.toLowerCase();
+      results = results.filter(p => 
+        p.receiptNo.toLowerCase().includes(q) ||
+        p.establishmentId.toLowerCase().includes(q) ||
+        p.establishmentName.toLowerCase().includes(q) ||
+        (p.collectorName && p.collectorName.toLowerCase().includes(q))
+      );
+    }
+    setEstFilterSearchResults(results);
+  };
+
+  const handleDeletePayment = async (id, receiptNo, establishmentId, amountPaid) => {
+    if (!window.confirm(`Are you sure you want to delete the payment receipt "${receiptNo}" for ₹${amountPaid}? This will revert the establishment's balance.`)) {
+      return;
+    }
+    try {
+      await db.deleteEstablishmentPayment(id);
+      addLog(`Deleted Payment Receipt: ${receiptNo} for Establishment ${establishmentId} (₹${amountPaid})`);
+      
+      // Reload establishment list and payment list
+      const ests = await db.getEstablishments();
+      setEstablishmentsList(ests || []);
+      const pmts = await db.getEstablishmentPaymentsAll();
+      setEstablishmentPaymentsList(pmts || []);
+      
+      // Update filtered results using latest lists
+      let results = pmts;
+      if (estFilterDate) {
+        results = results.filter(p => p.dateTime.startsWith(estFilterDate));
+      }
+      if (estFilterRoute !== 'All') {
+        results = results.filter(p => {
+          const est = ests.find(e => e.id === p.establishmentId);
+          return est && String(est.routeId) === String(estFilterRoute);
+        });
+      }
+      if (estFilterSearch.trim()) {
+        const q = estFilterSearch.toLowerCase();
+        results = results.filter(p => 
+          p.receiptNo.toLowerCase().includes(q) ||
+          p.establishmentId.toLowerCase().includes(q) ||
+          p.establishmentName.toLowerCase().includes(q) ||
+          (p.collectorName && p.collectorName.toLowerCase().includes(q))
+        );
+      }
+      setEstFilterSearchResults(results);
+      
+      alert('Payment deleted successfully.');
+    } catch (err) {
+      console.error(err);
+      alert('Error deleting payment: ' + err.message);
+    }
+  };
+
   const downloadEstPendingReport = () => {
     const start = estReportStartDate;
     const end = estReportEndDate;
@@ -1267,6 +1368,10 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                 <BarChart2 size={16} />
                 <span>Dashboard</span>
               </div>
+              <div className={`admin-mobile-menu-item ${activeTab === 'records' ? 'active' : ''}`} onClick={() => { setActiveTab('records'); setMenuOpen(false); }}>
+                <FileText size={16} />
+                <span>Payments Records</span>
+              </div>
               <div className={`admin-mobile-menu-item ${activeTab === 'master-establishments' ? 'active' : ''}`} onClick={() => { setActiveTab('master-establishments'); setMenuOpen(false); }}>
                 <Database size={16} />
                 <span>Master Data</span>
@@ -1401,6 +1506,13 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                 >
                   <BarChart2 size={18} />
                   <span>Dashboard</span>
+                </li>
+                <li 
+                  className={`admin-menu-item ${activeTab === 'records' ? 'active' : ''}`}
+                  onClick={() => handleTabChange('records')}
+                >
+                  <FileText size={18} />
+                  <span>Payments Records</span>
                 </li>
                 <li 
                   className={`admin-menu-item ${activeTab === 'master-establishments' ? 'active' : ''}`}
@@ -1849,7 +1961,7 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
         )}
 
         {/* ----------------- TAB 2: RECORDS LIST VIEW ----------------- */}
-        {activeTab === 'records' && (
+        {activeTab === 'records' && adminType === 'drcc' && (
           <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <div className="admin-section-header">
               <div className="admin-section-title">
@@ -1948,12 +2060,13 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                     <th>Total Wt (Kg)</th>
                     <th>Amount (₹)</th>
                     <th>Status</th>
+                    <th>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {recordSearchResults.length === 0 ? (
                     <tr>
-                      <td colSpan="13" style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                      <td colSpan="14" style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
                         No records match the current filters. Click search or change dates.
                       </td>
                     </tr>
@@ -1981,6 +2094,165 @@ export default function AdminPanel({ onLogout, currentRates, onRatesUpdated, isM
                         <td style={{ fontWeight: 700, color: '#0c5c37' }}>₹{rec.totalAmount.toLocaleString()}</td>
                         <td>
                           <span className="status-badge completed">Completed</span>
+                        </td>
+                        <td>
+                          <button 
+                            style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                            onClick={() => handleDeleteRecord(rec.id, rec.receiptNo)}
+                            title="Delete Record"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'records' && adminType === 'est' && (
+          <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div className="admin-section-header">
+              <div className="admin-section-title">
+                <h2>Establishment Payments Records</h2>
+                <p>Search, filter, and delete establishment payment receipts.</p>
+              </div>
+              
+              <button 
+                className="btn-primary" 
+                onClick={() => {
+                  const headers = ['Receipt No', 'Date & Time', 'Establishment ID', 'Establishment Name', 'Amount Paid (Rs)', 'Payment Mode', 'Remarks', 'Collector Name', 'Collector ID', 'Billing Period'];
+                  const rows = estFilterSearchResults.map(p => [
+                    p.receiptNo,
+                    new Date(p.dateTime).toLocaleString(),
+                    p.establishmentId,
+                    p.establishmentName,
+                    p.amountPaid,
+                    p.paymentMode,
+                    p.remarks || '',
+                    p.collectorName,
+                    p.collectorId,
+                    p.billingPeriod || ''
+                  ]);
+                  exportEstToCSV(headers, rows, `Est_Filtered_Payments.csv`);
+                }}
+              >
+                <Download size={16} />
+                Export CSV
+              </button>
+            </div>
+
+            {/* Filter Panel */}
+            <div className="card" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(4, 1fr)', gap: '16px', alignItems: 'end', background: '#ffffff' }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Date</label>
+                <input 
+                  type="date" 
+                  className="form-input"
+                  value={estFilterDate}
+                  onChange={(e) => setEstFilterDate(e.target.value)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Route Filter</label>
+                <select 
+                  className="form-select"
+                  value={estFilterRoute}
+                  onChange={(e) => setEstFilterRoute(e.target.value)}
+                >
+                  <option value="All">All Routes</option>
+                  <option value="1">Route 1: GANDHICHOWK</option>
+                  <option value="2">Route 2: GATTAIAH CENTER</option>
+                  <option value="3">Route 3: IT HUB TO SRI SRI CIRCLE</option>
+                  <option value="4">Route 4: KAMAN BAZAR</option>
+                  <option value="5">Route 5: KHANAPURAM</option>
+                  <option value="6">Route 6: MUSTAFANAGAR</option>
+                  <option value="7">Route 7: WYRA ROAD</option>
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Search Shop / Receipt / Collector</label>
+                <input 
+                  type="text" 
+                  className="form-input"
+                  placeholder="Search name, ID, receipt, collector..."
+                  value={estFilterSearch}
+                  onChange={(e) => setEstFilterSearch(e.target.value)}
+                />
+              </div>
+
+              <button 
+                className="btn-primary" 
+                style={{ padding: '11px', display: 'flex', justifyContent: 'center' }}
+                onClick={handleEstPaymentSearch}
+              >
+                <Search size={16} />
+                SEARCH PAYMENTS
+              </button>
+            </div>
+
+            {/* Grid Table */}
+            <div className="table-container">
+              <table className="custom-table">
+                <thead>
+                  <tr>
+                    <th>#</th>
+                    <th>Receipt No</th>
+                    <th>Date & Time</th>
+                    <th>Establishment ID & Name</th>
+                    <th>Billing Period</th>
+                    <th>Amount Paid (₹)</th>
+                    <th>Payment Mode</th>
+                    <th>Collector</th>
+                    <th>Remarks</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {estFilterSearchResults.length === 0 ? (
+                    <tr>
+                      <td colSpan="10" style={{ textAlign: 'center', padding: '24px', color: '#64748b' }}>
+                        No payment records match the current filters. Click search or change dates.
+                      </td>
+                    </tr>
+                  ) : (
+                    estFilterSearchResults.map((pmt, index) => (
+                      <tr key={pmt.id}>
+                        <td>{index + 1}</td>
+                        <td style={{ fontWeight: 700 }}>{pmt.receiptNo}</td>
+                        <td>
+                          <div style={{ fontSize: '0.85rem' }}>
+                            {new Date(pmt.dateTime).toLocaleString('en-IN', {
+                              day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                            })}
+                          </div>
+                        </td>
+                        <td>
+                          <div style={{ fontWeight: 600 }}>{pmt.establishmentName}</div>
+                          <div style={{ fontSize: '0.75rem', color: '#64748b' }}>ID: {pmt.establishmentId}</div>
+                        </td>
+                        <td style={{ fontWeight: 600, color: '#0284c7' }}>{pmt.billingPeriod || 'N/A'}</td>
+                        <td style={{ fontWeight: 700, color: '#0c5c37' }}>₹{pmt.amountPaid}</td>
+                        <td>
+                          <span className={`status-badge ${pmt.paymentMode === 'UPI' ? 'completed' : pmt.paymentMode === 'Cash' ? 'pending' : 'primary'}`}>
+                            {pmt.paymentMode}
+                          </span>
+                        </td>
+                        <td>{pmt.collectorName || 'Srinivas'}</td>
+                        <td style={{ fontSize: '0.8rem', color: '#64748b' }}>{pmt.remarks || '—'}</td>
+                        <td>
+                          <button 
+                            style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '4px' }}
+                            onClick={() => handleDeletePayment(pmt.id, pmt.receiptNo, pmt.establishmentId, pmt.amountPaid)}
+                            title="Delete Payment"
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </td>
                       </tr>
                     ))

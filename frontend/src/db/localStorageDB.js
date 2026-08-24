@@ -219,6 +219,16 @@ class LocalStorageDB {
     return newRecord;
   }
 
+  deleteRecord(id) {
+    let list = this.getRecords();
+    list = list.filter(r => r.id !== id);
+    localStorage.setItem('rvs_records', JSON.stringify(list));
+    const syncedIds = JSON.parse(localStorage.getItem('rvs_synced_record_ids')) || [];
+    const updatedSync = syncedIds.filter(x => x !== id);
+    localStorage.setItem('rvs_synced_record_ids', JSON.stringify(updatedSync));
+    return true;
+  }
+
   updateDivisionStats() {
     const divisions = this.getDivisions();
     const vehicles = this.getVehicles();
@@ -347,6 +357,32 @@ class LocalStorageDB {
 
   getEstablishmentPaymentsAll() {
     return JSON.parse(localStorage.getItem('rvs_establishment_payments')) || [];
+  }
+
+  deleteEstablishmentPayment(id) {
+    let payments = this.getEstablishmentPaymentsAll();
+    const pmt = payments.find(p => p.id === id);
+    if (!pmt) return false;
+    
+    payments = payments.filter(p => p.id !== id);
+    localStorage.setItem('rvs_establishment_payments', JSON.stringify(payments));
+    
+    const estList = JSON.parse(localStorage.getItem('rvs_establishments')) || [];
+    const updatedEstList = estList.map(e => {
+      if (e.id === pmt.establishmentId) {
+        return {
+          ...e,
+          previousBalance: (e.previousBalance || 0) + (parseFloat(pmt.amountPaid) || 0)
+        };
+      }
+      return e;
+    });
+    localStorage.setItem('rvs_establishments', JSON.stringify(updatedEstList));
+
+    const syncedIds = JSON.parse(localStorage.getItem('rvs_synced_payment_ids')) || [];
+    const updatedSync = syncedIds.filter(x => x !== id);
+    localStorage.setItem('rvs_synced_payment_ids', JSON.stringify(updatedSync));
+    return true;
   }
 
   addEstablishment(est) {
@@ -765,6 +801,19 @@ class BackendAPIClient {
     }
   }
 
+  async deleteRecord(id) {
+    await this.checkBackend();
+    if (this.useFallback) return localBackup.deleteRecord(id);
+    try {
+      const res = await fetch(`${API_URL}/records/${id}`, {
+        method: 'DELETE'
+      });
+      return await res.json();
+    } catch (e) {
+      return localBackup.deleteRecord(id);
+    }
+  }
+
   async getEstablishments(routeId, query, status) {
     await this.checkBackend();
     if (this.useFallback) return localBackup.getEstablishments(routeId, query, status);
@@ -837,6 +886,19 @@ class BackendAPIClient {
       return await res.json();
     } catch (e) {
       return localBackup.getEstablishmentPaymentsAll();
+    }
+  }
+
+  async deleteEstablishmentPayment(id) {
+    await this.checkBackend();
+    if (this.useFallback) return localBackup.deleteEstablishmentPayment(id);
+    try {
+      const res = await fetch(`${API_URL}/establishment-payments/${id}`, {
+        method: 'DELETE'
+      });
+      return await res.json();
+    } catch (e) {
+      return localBackup.deleteEstablishmentPayment(id);
     }
   }
 
