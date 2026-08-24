@@ -556,7 +556,7 @@ router.post('/establishment-payments', async (req, res) => {
     const receiptNoFinal = payment.receiptNo || receiptNo;
     const dateTime = payment.dateTime || new Date().toISOString();
 
-    await run(`INSERT OR IGNORE INTO establishment_payments (
+    const result = await run(`INSERT OR IGNORE INTO establishment_payments (
       id, receipt_no, date_time, establishment_id, establishment_name, amount_paid, payment_mode, remarks, collector_name, collector_id, billing_period
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [
       id, receiptNoFinal, dateTime, targetEstId, payment.establishmentName,
@@ -565,9 +565,8 @@ router.post('/establishment-payments', async (req, res) => {
       payment.billingPeriod || null
     ]);
 
-    // Update establishment balance after payment (only if it wasn't ignored/duplicate)
-    const checkInserted = await query(`SELECT COUNT(*) as count FROM establishment_payments WHERE id = ?`, [id]);
-    if (checkInserted[0].count > 0) {
+    // Update establishment balance after payment (only if it was newly inserted in this request)
+    if (result && result.changes > 0) {
       await run(`UPDATE establishments SET balance = MAX(0, balance - ?) WHERE id = ?`, [
         parseFloat(payment.amountPaid) || 0, targetEstId
       ]);

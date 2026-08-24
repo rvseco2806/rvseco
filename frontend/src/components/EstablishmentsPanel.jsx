@@ -37,6 +37,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
   const [selectedBillingPeriod, setSelectedBillingPeriod] = useState(getBillingPeriod().periodStr);
   const [customBillingPeriod, setCustomBillingPeriod] = useState('');
   const [isCustomPeriod, setIsCustomPeriod] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Revisit scheduling states
   const [showRevisitForm, setShowRevisitForm] = useState(false);
@@ -163,9 +164,13 @@ export default function EstablishmentsPanel({ onBackToHome }) {
 
   const handleGenerateReceipt = async () => {
     if (!selectedEstablishment) return;
+    if (isSaving) return;
+    setIsSaving(true);
     
     try {
+      const uniquePaymentId = 'EST-pay-' + Date.now() + '-' + Math.random().toString(36).substring(2, 9);
       const payment = {
+        id: uniquePaymentId,
         establishmentId: selectedEstablishment.id,
         establishmentName: selectedEstablishment.name,
         amountPaid: parseFloat(amountReceived) || 0,
@@ -194,6 +199,8 @@ export default function EstablishmentsPanel({ onBackToHome }) {
       setScreen(5);
     } catch (err) {
       alert("Error recording payment: " + err.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -1089,6 +1096,7 @@ export default function EstablishmentsPanel({ onBackToHome }) {
               {/* Generate Receipt */}
               <button 
                 onClick={handleGenerateReceipt}
+                disabled={isSaving}
                 style={{ 
                   backgroundColor: '#0c5c37', 
                   color: '#ffffff', 
@@ -1097,16 +1105,17 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                   padding: '14px', 
                   fontWeight: 700, 
                   fontSize: '0.95rem', 
-                  cursor: 'pointer',
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
                   display: 'flex', 
                   alignItems: 'center', 
                   justifyContent: 'center', 
                   gap: '8px',
                   boxShadow: '0 4px 10px rgba(12, 92, 55, 0.2)',
-                  marginTop: 'auto'
+                  marginTop: 'auto',
+                  opacity: isSaving ? 0.7 : 1
                 }}
               >
-                Generate Receipt
+                {isSaving ? 'Generating...' : 'Generate Receipt'}
               </button>
 
             </div>
@@ -1125,6 +1134,9 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                 </div>
               </div>
               <h2 style={{ color: '#0c5c37', fontWeight: 800, fontSize: '1.4rem' }}>Payment Recorded Successfully!</h2>
+              <p style={{ color: '#475569', fontSize: '0.9rem', marginTop: '8px', fontWeight: 600 }}>
+                Payment is done for the billing period <span style={{ color: '#0c5c37', fontWeight: 800 }}>"{latestReceipt.billingPeriod || getBillingPeriod(latestReceipt.dateTime).periodStr}"</span>
+              </p>
             </div>
 
             {/* Receipt Summary Grid */}
@@ -1806,11 +1818,14 @@ export default function EstablishmentsPanel({ onBackToHome }) {
 
               {/* Submit Button */}
               <button
+                disabled={isSaving}
                 onClick={async () => {
+                  if (isSaving) return;
                   if (!estForm.name.trim()) {
                     alert('Business Name is required');
                     return;
                   }
+                  setIsSaving(true);
                   try {
                     if (isEditingEst) {
                       const updated = await db.updateEstablishment(selectedEstablishment.id, {
@@ -1842,6 +1857,8 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                     }
                   } catch (err) {
                     alert('Error saving establishment: ' + err.message);
+                  } finally {
+                    setIsSaving(false);
                   }
                 }}
                 style={{
@@ -1852,12 +1869,13 @@ export default function EstablishmentsPanel({ onBackToHome }) {
                   padding: '14px',
                   fontWeight: 700,
                   fontSize: '0.9rem',
-                  cursor: 'pointer',
+                  cursor: isSaving ? 'not-allowed' : 'pointer',
                   marginTop: '16px',
-                  boxShadow: '0 4px 10px rgba(12, 92, 55, 0.2)'
+                  boxShadow: '0 4px 10px rgba(12, 92, 55, 0.2)',
+                  opacity: isSaving ? 0.7 : 1
                 }}
               >
-                {isEditingEst ? 'Save Changes' : 'Register Establishment'}
+                {isSaving ? 'Saving...' : (isEditingEst ? 'Save Changes' : 'Register Establishment')}
               </button>
             </div>
           </div>
